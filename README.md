@@ -180,5 +180,8 @@ make axioms       # regenerate the AXIOMS.md inventory from Interface.v
 
 ## Reading order
 
-`AXIOMS.md` first, then `theories/Substrate/Interface.v` — between them they
-fix everything the rest of the development is allowed to assume.
+`HANDOFF.md` if you are picking the project up: it holds the design decisions,
+the Rocq gotchas that cost time, and the ordered list of what to do next.
+
+Otherwise `AXIOMS.md` first, then `theories/Substrate/Interface.v` — between
+them they fix everything the rest of the development is allowed to assume.
