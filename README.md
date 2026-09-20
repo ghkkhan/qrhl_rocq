@@ -75,6 +75,7 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1b | registers: memory split, `U_vars`, `A»Q`, `S»Q` | **done** (set-indexed; ordered `Type^list_Q` bridge pending) |
 | 1b | semantics `⟦c⟧`, `Pr[e : c(ρ)]`, point-mass laws | **done** |
 | 1b | `denote_wf_trace`: `⟦c⟧` is a cq-superoperator | **done** for loop-free programs |
+| 1b | `denote_add`: `⟦c⟧` is additive | **done** for loop-free programs |
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |

@@ -842,6 +842,98 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     wt c -> loopfree c -> forall r, cqs_wf r -> cqs_wf (denote c r).
   Proof. intros Hwt Hlf r Hr; apply (denote_wf_trace c Hwt Hlf r Hr). Qed.
 
+  (* ================================================================= *)
+  (** ** [[c]] is additive
+
+      A cq-superoperator is in particular additive on the positive cone. This
+      is what lets a state be split -- by the value of a classical expression,
+      or into its pure components -- and the pieces recombined afterwards, so
+      it is a prerequisite for rules Case and If1 and for the converse of
+      Lemma 36.
+
+      Proved for loop-free programs, for the same reason as
+      [denote_wf_trace]. *)
+
+  Lemma restr_add (e : expr bool) (r s : cqs) :
+    restr e (cqs_add r s) = cqs_add (restr e r) (restr e s).
+  Proof.
+    apply funext; intros m; unfold restr, cqs_add.
+    destruct (ev e m); [ reflexivity | symmetry; apply tcp_add_zero ].
+  Qed.
+
+  Lemma restrn_add (e : expr bool) (r s : cqs) :
+    restrn e (cqs_add r s) = cqs_add (restrn e r) (restrn e s).
+  Proof.
+    apply funext; intros m; unfold restrn, cqs_add.
+    destruct (ev e m); [ symmetry; apply tcp_add_zero | reflexivity ].
+  Qed.
+
+  Lemma cqs_add_assoc4 (a b c d : cqs) :
+    cqs_add (cqs_add a b) (cqs_add c d)
+    = cqs_add (cqs_add a c) (cqs_add b d).
+  Proof.
+    apply funext; intros m; unfold cqs_add.
+    rewrite <- !tcp_add_assoc; f_equal.
+    rewrite !tcp_add_assoc; f_equal; apply tcp_add_comm.
+  Qed.
+
+  Theorem denote_add (c : prog) :
+    wt c -> loopfree c ->
+    forall r s, cqs_wf r -> cqs_wf s ->
+      denote c (cqs_add r s) = cqs_add (denote c r) (denote c s).
+  Proof.
+    induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
+                   | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
+      intros Hwt Hlf r s Hr Hs; cbn [denote] in *.
+    - (* Skip *) reflexivity.
+    - (* Assign *)
+      apply funext; intros m'; unfold sem_assign, cqs_add.
+      rewrite <- (tcp_sum_add _ _ _ _ (assign_inner_wf y e r m' Hr)
+                                     (assign_inner_wf y e s m' Hs)).
+      f_equal; apply funext; intros a.
+      destruct (excluded_middle_informative (acond y e m' a));
+        [ reflexivity | symmetry; apply tcp_add_zero ].
+    - (* Sample *)
+      apply funext; intros m'; unfold sem_sample, cqs_add.
+      rewrite <- (tcp_sum_add _ _ _ _ (sample_inner_wf y e r m' Hr)
+                                     (sample_inner_wf y e s m' Hs)).
+      f_equal; apply funext; intros a; apply tcp_scale_add.
+    - (* Cond *)
+      cbn [wt loopfree] in Hwt, Hlf.
+      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
+      rewrite restr_add, restrn_add.
+      rewrite (IH1 Hwt1 Hlf1 _ _ (restr_wf e r Hr) (restr_wf e s Hs)).
+      rewrite (IH2 Hwt2 Hlf2 _ _ (restrn_wf e r Hr) (restrn_wf e s Hs)).
+      apply cqs_add_assoc4.
+    - (* While: excluded *)
+      cbn [loopfree] in Hlf; destruct Hlf.
+    - (* Seq *)
+      cbn [wt loopfree] in Hwt, Hlf.
+      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
+      rewrite (IH1 Hwt1 Hlf1 _ _ Hr Hs).
+      apply (IH2 Hwt2 Hlf2);
+        apply (denote_wf c1 Hwt1 Hlf1); assumption.
+    - (* QInit *)
+      apply funext; intros m; unfold sem_qinit, cqs_add.
+      rewrite tcp_conj_add, tcp_ptraceL_add, tcp_tensor_add_r, tcp_conj_add;
+        reflexivity.
+    - (* QApply *)
+      apply funext; intros m; unfold sem_qapply, cqs_add; apply tcp_conj_add.
+    - (* Measure *)
+      apply funext; intros m'; unfold sem_measure, cqs_add.
+      cbn [wt] in Hwt.
+      transitivity
+        (tcp_sum (fun a : ctype y =>
+           tcp_add (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                             (r (cupd m' y a)))
+                   (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                             (s (cupd m' y a))))).
+      { f_equal; apply funext; intros a; apply tcp_conj_add. }
+      apply (tcp_sum_add _ _ _ _
+               (measure_inner_wf y Pq e Hwt r m' Hr)
+               (measure_inner_wf y Pq e Hwt s m' Hs)).
+  Qed.
+
   Corollary denote_trace_le (c : prog) :
     wt c -> loopfree c ->
     forall r, cqs_wf r -> (cqs_trace (denote c r) <= cqs_trace r)%R.

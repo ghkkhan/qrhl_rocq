@@ -563,6 +563,9 @@ Module Type HILBERT_SUBSTRATE.
       tcp_ptrace (tcp_conj (tensoro oid B) r) = tcp_ptrace r.
   Axiom tcp_tensor_proj : forall X Y (v : l2 X) (w : l2 Y),
       tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w).
+  Axiom tcp_tensor_add_r : forall X Y (r : tcp X) (s t : tcp Y),
+      tcp_tensor r (tcp_add s t)
+      = tcp_add (tcp_tensor r s) (tcp_tensor r t).
 
   (** *** Sums *)
 
@@ -580,6 +583,12 @@ Module Type HILBERT_SUBSTRATE.
       (forall l, NoDup l -> tcp_le (tcp_lsum F l) s) -> tcp_le (tcp_sum F) s.
   Axiom tcp_sum_not_summable : forall X J (F : J -> tcp X),
       ~ tcp_summable F -> tcp_sum F = tcp_zero.
+
+  (** Sums are additive. *)
+  Axiom tcp_sum_add : forall X J (F G : J -> tcp X),
+      tcp_summable F -> tcp_summable G ->
+      tcp_sum (fun j => tcp_add (F j) (G j))
+      = tcp_add (tcp_sum F) (tcp_sum G).
 
   (** Reindexing along a bijection. *)
   Axiom tcp_sum_bij : forall X (I J : Type) (h : J -> I) (g : I -> J)
