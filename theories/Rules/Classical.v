@@ -413,6 +413,147 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   End Assign1.
 
   (* ================================================================= *)
+  (** ** If1  [Figure 2, Lemma 58, p. 64]
+
+<<
+         {Cla[idx_1 e] cap A} c ~ skip {B}
+         {Cla[~ idx_1 e] cap A} d ~ skip {B}
+        ------------------------------------------
+         {A} if e then c else d ~ skip {B}
+>>
+
+      Split the given state by the value of the condition on side 1, apply one
+      premise to each half, and add the two witnesses. Two things make this go
+      through without any new machinery:
+
+      - the condition is a *left-hand* expression, so its value does not depend
+        on the right-hand memory; it therefore passes straight through the left
+        projection ([rcqs_projL_rrestr]), which is exactly what matches the
+        [Cond] clause of the semantics;
+      - the two halves add back up to the original state, and both projections
+        are additive, so the right projection comes back unchanged. *)
+
+  Theorem rule_If1 (e : expr bool) (c d : prog) (A B : pred) :
+    qrhl (pmeet (Cla (idx SL e)) A) c Skip B ->
+    qrhl (pmeet (Cla (gmap negb (idx SL e))) A) d Skip B ->
+    qrhl A (Cond e c d) Skip B.
+  Proof.
+    intros H1 H2 r Hwf Hsep Hsat.
+    (* the two halves *)
+    set (rt := rrestr (idx SL e) r).
+    set (rf := rrestrn (idx SL e) r).
+    assert (Hwft : rcqs_wf rt) by (apply rrestr_wf; exact Hwf).
+    assert (Hwff : rcqs_wf rf) by (apply rrestrn_wf; exact Hwf).
+    destruct (H1 rt Hwft (rrestr_sep _ _ Hsep)
+                (proj2 (psat_pmeet rt _ A)
+                   (conj (rrestr_psat_Cla (idx SL e) r)
+                         (rrestr_psat _ _ A Hsat))))
+      as [r1 [Hwf1 [Hsep1 [Hsat1 [HL1 HR1]]]]].
+    destruct (H2 rf Hwff (rrestrn_sep _ _ Hsep)
+                (proj2 (psat_pmeet rf _ A)
+                   (conj (rrestrn_psat_Cla (idx SL e) r)
+                         (rrestrn_psat _ _ A Hsat))))
+      as [r2 [Hwf2 [Hsep2 [Hsat2 [HL2 HR2]]]]].
+    exists (rcqs_add r1 r2); repeat split.
+    - apply rcqs_add_wf; assumption.
+    - apply rcqs_add_sep; assumption.
+    - (* the postcondition survives the sum: supports join *)
+      intros rm; unfold rcqs_add.
+      rewrite (tcp_supp_add _ (r1 rm) (r2 rm)).
+      apply hSup_lub; intros [|]; [ apply Hsat1 | apply Hsat2 ].
+    - (* left projection: the two halves are the two branches *)
+      rewrite (rcqs_projL_add r1 r2 Hwf1 Hwf2), HL1, HL2.
+      cbn [denote].
+      unfold rt, rf; rewrite rcqs_projL_rrestr, rcqs_projL_rrestrn; reflexivity.
+    - (* right projection: the halves add back up *)
+      rewrite (rcqs_projR_add r1 r2 Hwf1 Hwf2).
+      cbn [denote] in HR1, HR2 |- *.
+      rewrite HR1, HR2, <- (rcqs_projR_add rt rf Hwft Hwff).
+      unfold rt, rf; rewrite rrestr_split; reflexivity.
+  Qed.
+
+  (* ================================================================= *)
+  (** ** JointIf  [Figure 2, Lemma 59, p. 64]
+
+<<
+         A subseteq Cla[idx_1 e_1 = idx_2 e_2]
+         {Cla[idx_1 e_1 /\ idx_2 e_2] cap A} c1 ~ c2 {B}
+         {Cla[~idx_1 e_1 /\ ~idx_2 e_2] cap A} d1 ~ d2 {B}
+        --------------------------------------------------------
+         {A} if e1 then c1 else d1 ~ if e2 then c2 else d2 {B}
+>>
+
+      The two programs are "in sync": the precondition forces the two guards to
+      agree wherever the state is nonzero, so a single split -- by the left
+      guard -- serves both sides. That is what
+      [rcqs_projR_rrestr_swap] expresses, and it is the only thing this rule
+      needs beyond [If1]. *)
+
+  Definition guards_agree (e1 e2 : expr bool) : pred :=
+    Cla (gmap2 Bool.eqb (idx SL e1) (idx SR e2)).
+
+  Theorem rule_JointIf (e1 e2 : expr bool) (c1 c2 d1 d2 : prog) (A B : pred) :
+    ple A (guards_agree e1 e2) ->
+    qrhl (pmeet (Cla (gmap2 andb (idx SL e1) (idx SR e2))) A) c1 c2 B ->
+    qrhl (pmeet (Cla (gmap2 andb (gmap negb (idx SL e1))
+                                 (gmap negb (idx SR e2)))) A) d1 d2 B ->
+    qrhl A (Cond e1 c1 d1) (Cond e2 c2 d2) B.
+  Proof.
+    intros HA H1 H2 r Hwf Hsep Hsat.
+    (* the guards agree on the support *)
+    assert (Hag : forall rm, r rm <> tcp_zero ->
+                  ev e1 (csel SL rm) = ev e2 (csel SR rm)).
+    { intros rm Hnz.
+      pose proof (proj1 (psat_Cla r _)
+                    (psat_mono r A (guards_agree e1 e2) HA Hsat) rm Hnz) as Hc.
+      change (ev (gmap2 Bool.eqb (idx SL e1) (idx SR e2)) rm)
+        with (Bool.eqb (ev e1 (csel SL rm)) (ev e2 (csel SR rm))) in Hc.
+      destruct (ev e1 (csel SL rm)), (ev e2 (csel SR rm));
+        solve [ reflexivity | discriminate Hc ]. }
+    set (rt := rrestr (idx SL e1) r).
+    set (rf := rrestrn (idx SL e1) r).
+    assert (Hwft : rcqs_wf rt) by (apply rrestr_wf; exact Hwf).
+    assert (Hwff : rcqs_wf rf) by (apply rrestrn_wf; exact Hwf).
+    (* each half satisfies its branch's precondition *)
+    assert (Hpt : psat rt (Cla (gmap2 andb (idx SL e1) (idx SR e2)))).
+    { apply psat_Cla; intros rm Hnz.
+      destruct (rrestr_nz _ _ _ Hnz) as [Hg Hrn].
+      change (ev (idx SL e1) rm) with (ev e1 (csel SL rm)) in Hg.
+      change (ev (gmap2 andb (idx SL e1) (idx SR e2)) rm)
+        with (andb (ev e1 (csel SL rm)) (ev e2 (csel SR rm))).
+      rewrite <- (Hag rm Hrn), Hg; reflexivity. }
+    assert (Hpf : psat rf (Cla (gmap2 andb (gmap negb (idx SL e1))
+                                           (gmap negb (idx SR e2))))).
+    { apply psat_Cla; intros rm Hnz.
+      destruct (rrestrn_nz _ _ _ Hnz) as [Hg Hrn].
+      change (ev (idx SL e1) rm) with (ev e1 (csel SL rm)) in Hg.
+      change (ev (gmap2 andb (gmap negb (idx SL e1))
+                             (gmap negb (idx SR e2))) rm)
+        with (andb (negb (ev e1 (csel SL rm))) (negb (ev e2 (csel SR rm)))).
+      rewrite <- (Hag rm Hrn), Hg; reflexivity. }
+    destruct (H1 rt Hwft (rrestr_sep _ _ Hsep)
+                (proj2 (psat_pmeet rt _ A)
+                   (conj Hpt (rrestr_psat _ _ A Hsat))))
+      as [r1 [Hwf1 [Hsep1 [Hsat1 [HL1 HR1]]]]].
+    destruct (H2 rf Hwff (rrestrn_sep _ _ Hsep)
+                (proj2 (psat_pmeet rf _ A)
+                   (conj Hpf (rrestrn_psat _ _ A Hsat))))
+      as [r2 [Hwf2 [Hsep2 [Hsat2 [HL2 HR2]]]]].
+    exists (rcqs_add r1 r2); repeat split.
+    - apply rcqs_add_wf; assumption.
+    - apply rcqs_add_sep; assumption.
+    - intros rm; unfold rcqs_add.
+      rewrite (tcp_supp_add _ (r1 rm) (r2 rm)).
+      apply hSup_lub; intros [|]; [ apply Hsat1 | apply Hsat2 ].
+    - rewrite (rcqs_projL_add r1 r2 Hwf1 Hwf2), HL1, HL2; cbn [denote].
+      unfold rt, rf; rewrite rcqs_projL_rrestr, rcqs_projL_rrestrn; reflexivity.
+    - rewrite (rcqs_projR_add r1 r2 Hwf1 Hwf2), HR1, HR2; cbn [denote].
+      unfold rt, rf.
+      rewrite (rcqs_projR_rrestr_swap e1 e2 r Hag),
+              (rcqs_projR_rrestrn_swap e1 e2 r Hag); reflexivity.
+  Qed.
+
+  (* ================================================================= *)
   (** ** Still to come in Figure 2
 
       The right-hand projection of [assignL], and with it rule [Assign1]

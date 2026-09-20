@@ -627,6 +627,57 @@ Proof.
 Qed.
 
 (* ------------------------------------------------------------------ *)
+(** ** Duplicate-free lists of booleans
+
+    A two-element index type has only five duplicate-free lists, and that is
+    what makes a sum over [bool] a binary addition. Used to show that
+    separability is closed under binary sums, which rule If1 needs. *)
+
+Lemma nodup_bool_tail (b : bool) (t : list bool) :
+  NoDup (b :: t) -> t = nil \/ t = negb b :: nil.
+Proof.
+  intros Hnd; inversion Hnd as [| ? ? Hb Hndt]; subst.
+  destruct t as [| d u]; [ left; reflexivity |].
+  assert (Hd : d = negb b)
+    by (destruct d, b; simpl; try reflexivity;
+        exfalso; apply Hb; left; reflexivity).
+  subst d.
+  destruct u as [| c v]; [ right; reflexivity |].
+  exfalso; inversion Hndt as [| ? ? Hnu Hndu]; subst.
+  assert (Hc : c = b \/ c = negb b) by (destruct c, b; auto).
+  destruct Hc as [-> | ->].
+  - apply Hb; right; left; reflexivity.
+  - apply Hnu; left; reflexivity.
+Qed.
+
+Lemma lsum_le_const {I : Type} (f : I -> R) (c : I) (l : list I) :
+  nonneg f -> NoDup l -> (forall i, In i l -> i = c) -> (lsum f l <= f c)%R.
+Proof.
+  intros Hf Hnd Hall.
+  destruct l as [| d t]; simpl; [ apply Hf |].
+  inversion Hnd as [| ? ? Hnd1 Hnd2]; subst.
+  assert (Hd : d = c) by (apply Hall; left; reflexivity); subst d.
+  destruct t as [| u v]; simpl.
+  - lra.
+  - exfalso; apply Hnd1.
+    assert (Hu : u = c) by (apply Hall; right; left; reflexivity); subst u.
+    left; reflexivity.
+Qed.
+
+Lemma lsum_bool_le (f : bool -> R) (l : list bool) :
+  nonneg f -> NoDup l -> (lsum f l <= f true + f false)%R.
+Proof.
+  intros Hf Hnd.
+  pose proof (Hf true) as Ht; pose proof (Hf false) as Hff.
+  destruct l as [| b t]; simpl; [ lra |].
+  assert (Htail : (lsum f t <= f (negb b))%R).
+  { apply lsum_le_const; [ exact Hf | inversion Hnd; assumption |].
+    intros i Hi; inversion Hnd as [| ? ? Hb ?]; subst.
+    destruct i, b; simpl; try reflexivity; exfalso; apply Hb; exact Hi. }
+  destruct b; simpl in *; lra.
+Qed.
+
+(* ------------------------------------------------------------------ *)
 (** ** Additivity
 
     [tsum] is additive. The upper bound is immediate from the least-upper-bound

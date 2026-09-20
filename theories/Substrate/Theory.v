@@ -843,6 +843,53 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     rewrite <- Heq3; reflexivity.
   Qed.
 
+  (** *** A sum over [bool] is a binary addition
+
+      Needed because separability has to be closed under binary sums (rule
+      If1), and the only way to combine two decompositions is to index them
+      jointly. *)
+
+  Lemma tcp_le_add_l {X} (r s : tcp X) : tcp_le r (tcp_add r s).
+  Proof. apply tcp_le_add; exists s; reflexivity. Qed.
+
+  Lemma tcp_le_add_r {X} (r s : tcp X) : tcp_le s (tcp_add r s).
+  Proof. rewrite tcp_add_comm; apply tcp_le_add_l. Qed.
+
+  Lemma tcp_lsum_bool_le {X} (G : bool -> tcp X) (l : list bool) :
+    NoDup l -> tcp_le (tcp_lsum G l) (tcp_add (G true) (G false)).
+  Proof.
+    intros Hnd; destruct l as [| b t].
+    - rewrite tcp_lsum_nil; apply tcp_zero_le.
+    - destruct (nodup_bool_tail b t Hnd) as [-> | ->].
+      + rewrite tcp_lsum_cons, tcp_lsum_nil, tcp_add_zero.
+        destruct b; [ apply tcp_le_add_l | apply tcp_le_add_r ].
+      + rewrite !tcp_lsum_cons, tcp_lsum_nil, tcp_add_zero.
+        destruct b; simpl; [ apply tcp_le_refl |].
+        rewrite tcp_add_comm; apply tcp_le_refl.
+  Qed.
+
+  Lemma tcp_summable_bool {X} (G : bool -> tcp X) : tcp_summable G.
+  Proof.
+    apply tcp_summable_trace, summable_bounded
+      with (M := (tcp_trace (G true) + tcp_trace (G false))%R).
+    intros l Hnd; apply lsum_bool_le;
+      [ intros b; apply tcp_trace_nonneg | exact Hnd ].
+  Qed.
+
+  Lemma tcp_sum_bool {X} (G : bool -> tcp X) :
+    tcp_sum G = tcp_add (G true) (G false).
+  Proof.
+    apply tcp_ext.
+    - apply tcp_sum_least; [ apply tcp_summable_bool |].
+      intros l Hnd; apply tcp_lsum_bool_le; exact Hnd.
+    - replace (tcp_add (G true) (G false))
+         with (tcp_lsum G (true :: false :: nil))
+         by (unfold tcp_lsum; simpl; rewrite tcp_add_zero; reflexivity).
+      apply tcp_sum_ub; [ apply tcp_summable_bool |].
+      constructor; [ intros H; destruct H as [H | H]; [ discriminate | destruct H ]
+                   | constructor; [ intros H; destruct H | constructor ] ].
+  Qed.
+
   (** The everywhere-zero family sums to zero. *)
   Lemma tcp_sum_zero {X J} (F : J -> tcp X) :
     (forall j, F j = tcp_zero) -> tcp_sum F = tcp_zero.
