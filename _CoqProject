@@ -1,0 +1,24 @@
+-R theories QRHL
+-arg -w -arg -notation-overridden
+
+# --- Phase 0: ambient logic and concrete prerequisites (no axioms of ours) ---
+theories/Substrate/Ambient.v
+theories/Substrate/Cnum.v
+theories/Substrate/Sums.v
+
+# --- Phase 1a: the substrate signature (the entire trusted surface) ---
+theories/Substrate/Interface.v
+theories/Substrate/Theory.v
+theories/Substrate/Sanity.v
+
+# --- Phase 1b: the language (static side) ---
+theories/Core/Vars.v
+theories/Core/Expr.v
+theories/Core/Registers.v
+theories/Core/Syntax.v
+theories/Core/Semantics.v
+theories/Core/Predicate.v
+theories/Core/QEq.v
+theories/Core/Judgment.v
+theories/Rules/General.v
+theories/Rules/Quantum.v
