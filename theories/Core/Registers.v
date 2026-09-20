@@ -467,6 +467,18 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     - intros j; rewrite rtcpR_trace; apply Rle_refl.
   Qed.
 
+  Lemma rtcpL_scale (a : R) (r : tcp rqmem) :
+    rtcpL (tcp_scale a r) = tcp_scale a (rtcpL r).
+  Proof.
+    unfold rtcpL; rewrite tcp_conj_scale, tcp_ptrace_scale; reflexivity.
+  Qed.
+
+  Lemma rtcpR_scale (a : R) (r : tcp rqmem) :
+    rtcpR (tcp_scale a r) = tcp_scale a (rtcpR r).
+  Proof.
+    unfold rtcpR; rewrite tcp_conj_scale, tcp_ptraceL_scale; reflexivity.
+  Qed.
+
   Lemma rtcpL_sum {J} (F : J -> tcp rqmem) :
     tcp_summable F -> rtcpL (tcp_sum F) = tcp_sum (fun j => rtcpL (F j)).
   Proof.

@@ -79,8 +79,8 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
-| 1d | `Skip` `Conseq` `Seq` `QApply1` `Assign1` `If1` `JointIf` | **done** |
-| 1d | the other 6 vertical-slice rules | in progress, see below |
+| 1d | `Skip` `Conseq` `Seq` `QApply1` `Assign1` `If1` `JointIf` `Sample1` | **done** |
+| 1d | the other 5 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
@@ -144,7 +144,7 @@ guessed):
 | rule | what it needs |
 |---|---|
 | ~~`If1`, `JointIf`~~ | **done** — needed no new axioms |
-| `Sample1` | `Assign1`'s pattern with subdistribution weights, plus `∑_j c_j·σ = (∑_j c_j)·σ` at the operator level, and the `Cla[e is total]` bookkeeping |
+| ~~`Sample1`~~ | **done** |
 | `Case` | `denote` **normality** (`⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ`), not just additivity: the case split is over an arbitrary result type, not two branches |
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
 | `Measure1`, `JointMeasureSimple` | per-outcome witnesses reassembled; same machinery as Lemma 36's converse |

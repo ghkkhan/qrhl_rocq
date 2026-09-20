@@ -674,9 +674,18 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     tcp_trace (tcp_ptraceL r) = tcp_trace r.
   Proof. apply tcp_ptrace2_trace. Qed.
 
+  Lemma tcp_ptraceL_scale {X Y} (a : R) (r : tcp (X * Y)) :
+    tcp_ptraceL (tcp_scale a r) = tcp_scale a (tcp_ptraceL r).
+  Proof. apply tcp_ptrace2_scale. Qed.
+
   Lemma tcp_ptraceL_tensor {X Y} (r : tcp X) (s : tcp Y) :
     tcp_ptraceL (tcp_tensor r s) = tcp_scale (tcp_trace r) s.
   Proof. apply tcp_ptrace2_tensor. Qed.
+
+  Lemma tcp_scale_zero {X} (a : R) : tcp_scale a (@tcp_zero X) = tcp_zero.
+  Proof.
+    apply tcp_trace_faithful; rewrite tcp_trace_scale, tcp_trace_zero; ring.
+  Qed.
 
   Lemma tcp_ptrace_zero {X Y} : tcp_ptrace (@tcp_zero (X * Y)) = tcp_zero.
   Proof.

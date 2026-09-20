@@ -117,6 +117,25 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       rewrite HFt, HFf; reflexivity.
   Qed.
 
+  Lemma tcp_sep_scale {X Y} (a : R) (r : tcp (X * Y)) :
+    tcp_sep r -> tcp_sep (tcp_scale a r).
+  Proof.
+    intros [J [f [g [Hs Hr]]]].
+    exists J, (fun j => tcp_scale a (f j)), g; split.
+    - apply tcp_summable_trace.
+      apply (summable_mono _ (fun j => (Rabs a * tcp_trace (tcp_tensor (f j) (g j)))%R)).
+      + apply summable_scale;
+          [ apply Rabs_pos
+          | intros j; apply tcp_trace_nonneg
+          | apply tcp_summable_trace; exact Hs ].
+      + intros j; rewrite !tcp_trace_tensor, tcp_trace_scale.
+        rewrite <- Rmult_assoc.
+        apply Rmult_le_compat_r; [ apply tcp_trace_nonneg |].
+        apply Rmult_le_compat_r; [ apply tcp_trace_nonneg | apply Rle_abs ].
+    - rewrite Hr, (tcp_scale_sum _ _ _ _ Hs).
+      f_equal; apply funext; intros j; apply tcp_scale_tensor_l.
+  Qed.
+
   (* ================================================================= *)
   (** ** Adding and restricting relational states
 

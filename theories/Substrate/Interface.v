@@ -563,6 +563,8 @@ Module Type HILBERT_SUBSTRATE.
       tcp_ptrace (tcp_conj (tensoro oid B) r) = tcp_ptrace r.
   Axiom tcp_tensor_proj : forall X Y (v : l2 X) (w : l2 Y),
       tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w).
+  Axiom tcp_scale_tensor_l : forall X Y (a : R) (r : tcp X) (s : tcp Y),
+      tcp_scale a (tcp_tensor r s) = tcp_tensor (tcp_scale a r) s.
   Axiom tcp_tensor_add_r : forall X Y (r : tcp X) (s t : tcp Y),
       tcp_tensor r (tcp_add s t)
       = tcp_add (tcp_tensor r s) (tcp_tensor r t).
@@ -583,6 +585,17 @@ Module Type HILBERT_SUBSTRATE.
       (forall l, NoDup l -> tcp_le (tcp_lsum F l) s) -> tcp_le (tcp_sum F) s.
   Axiom tcp_sum_not_summable : forall X J (F : J -> tcp X),
       ~ tcp_summable F -> tcp_sum F = tcp_zero.
+
+  (** Scaling commutes with sums, and a sum of rescalings of one operator is
+      that operator rescaled by the total. The second is what makes sampling
+      trace-preserving when the distribution is total. *)
+  Axiom tcp_scale_sum : forall X J (a : R) (F : J -> tcp X),
+      tcp_summable F ->
+      tcp_scale a (tcp_sum F) = tcp_sum (fun j => tcp_scale a (F j)).
+
+  Axiom tcp_sum_scale_const : forall X J (c : J -> R) (r : tcp X),
+      (forall j, (0 <= c j)%R) -> summable c ->
+      tcp_sum (fun j => tcp_scale (c j) r) = tcp_scale (tsum c) r.
 
   (** Sums are additive. *)
   Axiom tcp_sum_add : forall X J (F G : J -> tcp X),
