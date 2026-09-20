@@ -134,12 +134,22 @@ under that bijection the guard becomes "this is what `e` says of the source",
 which *is* unique. So the sum collapses after reindexing, not before, and that
 is exactly why the right-hand projection comes back unchanged.
 
-Still to do in Phase 1d: `Sample1`, `JointSample`, `If1`, `JointIf`, `Case`,
-`QInit1`, `Measure1`, `JointMeasureSimple`. `Sample1` follows `Assign1` with
-subdistribution weights. `QInit1` needs abstract superoperators, since
-initialization is a channel rather than a conjugation. The measurement rules
-and `Case` need per-outcome witnesses reassembled — the same machinery as the
-converse of Lemma 36.
+`denote_add` — that `⟦c⟧` is additive on the positive cone — is also proved for
+loop-free programs, which is what lets a state be split and the pieces
+recombined.
+
+Still to do in Phase 1d, with what each actually needs (established, not
+guessed):
+
+| rule | what it needs |
+|---|---|
+| `Sample1` | `Assign1`'s pattern with subdistribution weights, plus `∑_j c_j·σ = (∑_j c_j)·σ` at the operator level, and the `Cla[e is total]` bookkeeping |
+| `If1`, `JointIf` | binary `denote_add` (have it) — but also separability closed under binary sums, which needs `tcp_sum` over `bool` to be binary addition |
+| `Case` | `denote` **normality** (`⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ`), not just additivity: the case split is over an arbitrary result type, not two branches |
+| `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
+| `Measure1`, `JointMeasureSimple` | per-outcome witnesses reassembled; same machinery as Lemma 36's converse |
+
+`If1` is the cheapest of these and is the natural next one.
 
 ### Two smaller gaps in §4.4
 
