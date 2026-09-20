@@ -532,6 +532,14 @@ Module Type HILBERT_SUBSTRATE.
   Axiom tcp_ptrace2_tensor : forall X Y (r : tcp X) (s : tcp Y),
       tcp_ptrace2 (tcp_tensor r s) = tcp_scale (tcp_trace r) s.
 
+  (** Normality of the partial traces: they commute with infinite sums. *)
+  Axiom tcp_ptrace_sum : forall X Y J (F : J -> tcp (X * Y)),
+      tcp_summable F ->
+      tcp_ptrace (tcp_sum F) = tcp_sum (fun j => tcp_ptrace (F j)).
+  Axiom tcp_ptrace2_sum : forall X Y J (F : J -> tcp (X * Y)),
+      tcp_summable F ->
+      tcp_ptrace2 (tcp_sum F) = tcp_sum (fun j => tcp_ptrace2 (F j)).
+
   (** *** Partial trace versus an operation on one factor
 
       Acting on a factor that is *kept* commutes with the partial trace; acting
@@ -572,6 +580,25 @@ Module Type HILBERT_SUBSTRATE.
       (forall l, NoDup l -> tcp_le (tcp_lsum F l) s) -> tcp_le (tcp_sum F) s.
   Axiom tcp_sum_not_summable : forall X J (F : J -> tcp X),
       ~ tcp_summable F -> tcp_sum F = tcp_zero.
+
+  (** Reindexing along a bijection. *)
+  Axiom tcp_sum_bij : forall X (I J : Type) (h : J -> I) (g : I -> J)
+                             (F : I -> tcp X),
+      (forall j, g (h j) = j) -> (forall i, h (g i) = i) ->
+      tcp_summable F ->
+      tcp_summable (fun j => F (h j)) /\
+      tcp_sum (fun j => F (h j)) = tcp_sum F.
+
+  (** Tonelli: an iterated sum of positive operators may be flattened into a
+      single sum over the dependent pairs. Textbook (monotone convergence),
+      and the operator counterpart of [tsum_tonelli] in [Sums.v]. *)
+  Axiom tcp_sum_sigma : forall X (K : Type) (Pk : K -> Type)
+                               (F : forall k, Pk k -> tcp X),
+      (forall k, tcp_summable (F k)) ->
+      tcp_summable (fun k => tcp_sum (F k)) ->
+      tcp_summable (fun p : sigT Pk => F (projT1 p) (projT2 p)) /\
+      tcp_sum (fun k => tcp_sum (F k))
+      = tcp_sum (fun p : sigT Pk => F (projT1 p) (projT2 p)).
 
   (** *** Support
 

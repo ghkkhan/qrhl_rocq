@@ -444,6 +444,47 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     apply tcp_trace_conj_isometry, (proj1 Urqpair_unitary).
   Qed.
 
+  (** *** Normality
+
+      Both projections commute with infinite sums, which is what lets a witness
+      state built as a sum be pushed through them. *)
+
+  Lemma rtcpL_summable {J} (F : J -> tcp rqmem) :
+    tcp_summable F -> tcp_summable (fun j => rtcpL (F j)).
+  Proof.
+    intros Hs; apply tcp_summable_trace.
+    apply (summable_mono _ (fun j => tcp_trace (F j))).
+    - apply tcp_summable_trace; exact Hs.
+    - intros j; rewrite rtcpL_trace; apply Rle_refl.
+  Qed.
+
+  Lemma rtcpR_summable {J} (F : J -> tcp rqmem) :
+    tcp_summable F -> tcp_summable (fun j => rtcpR (F j)).
+  Proof.
+    intros Hs; apply tcp_summable_trace.
+    apply (summable_mono _ (fun j => tcp_trace (F j))).
+    - apply tcp_summable_trace; exact Hs.
+    - intros j; rewrite rtcpR_trace; apply Rle_refl.
+  Qed.
+
+  Lemma rtcpL_sum {J} (F : J -> tcp rqmem) :
+    tcp_summable F -> rtcpL (tcp_sum F) = tcp_sum (fun j => rtcpL (F j)).
+  Proof.
+    intros Hs; unfold rtcpL.
+    rewrite (tcp_conj_sum _ _ _ Urqpair F Hs).
+    apply tcp_ptrace_sum,
+      (tcp_summable_conj Urqpair F (proj1 Urqpair_unitary) Hs).
+  Qed.
+
+  Lemma rtcpR_sum {J} (F : J -> tcp rqmem) :
+    tcp_summable F -> rtcpR (tcp_sum F) = tcp_sum (fun j => rtcpR (F j)).
+  Proof.
+    intros Hs; unfold rtcpR, tcp_ptraceL.
+    rewrite (tcp_conj_sum _ _ _ Urqpair F Hs).
+    apply tcp_ptrace2_sum,
+      (tcp_summable_conj Urqpair F (proj1 Urqpair_unitary) Hs).
+  Qed.
+
   (* ================================================================= *)
   (** ** Acting on one side
 

@@ -283,6 +283,8 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_ptrace2_scale` | `forall X Y (a : R) (r : tcp (X * Y)), tcp_ptrace2 (tcp_scale a r) = tcp_scale a (tcp_ptrace2 r)` |
 | Axiom | `tcp_ptrace2_trace` | `forall X Y (r : tcp (X * Y)), tcp_trace (tcp_ptrace2 r) = tcp_trace r` |
 | Axiom | `tcp_ptrace2_tensor` | `forall X Y (r : tcp X) (s : tcp Y), tcp_ptrace2 (tcp_tensor r s) = tcp_scale (tcp_trace r) s` |
+| Axiom | `tcp_ptrace_sum` | `forall X Y J (F : J -> tcp (X * Y)), tcp_summable F -> tcp_ptrace (tcp_sum F) = tcp_sum (fun j => tcp_ptrace (F j))` |
+| Axiom | `tcp_ptrace2_sum` | `forall X Y J (F : J -> tcp (X * Y)), tcp_summable F -> tcp_ptrace2 (tcp_sum F) = tcp_sum (fun j => tcp_ptrace2 (F j))` |
 | Axiom | `tcp_ptrace_conj_tensorL` | `forall X X' Y (A : op X X') (r : tcp (X * Y)), tcp_ptrace (tcp_conj (tensoro A oid) r) = tcp_conj A (tcp_ptrace r)` |
 | Axiom | `tcp_ptrace2_conj_tensorL` | `forall X X' Y (A : op X X') (r : tcp (X * Y)), ocomp (oadj A) A = oid -> tcp_ptrace2 (tcp_conj (tensoro A oid) r) = tcp_ptrace2 r` |
 | Axiom | `tcp_ptrace2_conj_tensorR` | `forall X Y Y' (B : op Y Y') (r : tcp (X * Y)), tcp_ptrace2 (tcp_conj (tensoro oid B) r) = tcp_conj B (tcp_ptrace2 r)` |
@@ -293,6 +295,8 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_sum_ub` | `forall X J (F : J -> tcp X) (l : list J), tcp_summable F -> NoDup l -> tcp_le (tcp_lsum F l) (tcp_sum F)` |
 | Axiom | `tcp_sum_least` | `forall X J (F : J -> tcp X) (s : tcp X), tcp_summable F -> (forall l, NoDup l -> tcp_le (tcp_lsum F l) s) -> tcp_le (tcp_sum F) s` |
 | Axiom | `tcp_sum_not_summable` | `forall X J (F : J -> tcp X), ~ tcp_summable F -> tcp_sum F = tcp_zero` |
+| Axiom | `tcp_sum_bij` | `forall X (I J : Type) (h : J -> I) (g : I -> J) (F : I -> tcp X), (forall j, g (h j) = j) -> (forall i, h (g i) = i) -> tcp_summable F -> tcp_summable (fun j => F (h j)) /\ tcp_sum (fun j => F (h j)) = tcp_sum F` |
+| Axiom | `tcp_sum_sigma` | `forall X (K : Type) (Pk : K -> Type) (F : forall k, Pk k -> tcp X), (forall k, tcp_summable (F k)) -> tcp_summable (fun k => tcp_sum (F k)) -> tcp_summable (fun p : sigT Pk => F (projT1 p) (projT2 p)) /\ tcp_sum (fun k => tcp_sum (F k)) = tcp_sum (fun p : sigT Pk => F (projT1 p) (projT2 p))` |
 | Axiom | `tcp_supp_eq0` | `forall X (r : tcp X), tcp_supp r = hbot <-> r = tcp_zero` |
 | Axiom | `tcp_supp_proj` | `forall X (v : l2 X), tcp_supp (tcp_proj v) = hspan (fun u => u = v)` |
 | Axiom | `tcp_supp_add` | `forall X (r s : tcp X), tcp_supp (tcp_add r s) = hSup (fun b : bool => if b then tcp_supp r else tcp_supp s)` |
@@ -300,6 +304,6 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_supp_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_supp (tcp_sum F) = hSup (fun j => tcp_supp (F j))` |
 | Axiom | `tcp_decompose` | `forall X (r : tcp X), exists (J : Type) (psi : J -> l2 X), tcp_summable (fun j => tcp_proj (psi j)) /\ r = tcp_sum (fun j => tcp_proj (psi j))` |
 
-**Totals: 44 parameters, 111 axioms.**
+**Totals: 44 parameters, 115 axioms.**
 
 <!-- END GENERATED INVENTORY -->

@@ -21,4 +21,5 @@ theories/Core/Predicate.v
 theories/Core/QEq.v
 theories/Core/Judgment.v
 theories/Rules/General.v
+theories/Rules/Classical.v
 theories/Rules/Quantum.v

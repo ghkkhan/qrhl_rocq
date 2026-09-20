@@ -754,6 +754,16 @@ Module HTheory (S : HILBERT_SUBSTRATE).
         * destruct Hin' as [Heq | Hin']; [ congruence | contradiction ].
   Qed.
 
+  Lemma tcp_summable_conj {X Y J} (A : op X Y) (F : J -> tcp X) :
+    ocomp (oadj A) A = oid -> tcp_summable F ->
+    tcp_summable (fun j => tcp_conj A (F j)).
+  Proof.
+    intros HA Hs; apply tcp_summable_trace.
+    apply (summable_mono _ (fun j => tcp_trace (F j))).
+    - apply tcp_summable_trace; exact Hs.
+    - intros j; rewrite (tcp_trace_conj_isometry _ _ _ _ HA); apply Rle_refl.
+  Qed.
+
   Lemma tcp_summable_singleton {X J} (F : J -> tcp X) (j0 : J) :
     (forall j, j <> j0 -> F j = tcp_zero) -> tcp_summable F.
   Proof.
@@ -782,6 +792,55 @@ Module HTheory (S : HILBERT_SUBSTRATE).
         by (rewrite tcp_lsum_cons, tcp_lsum_nil; apply tcp_add_zero).
       apply tcp_sum_ub; [ exact Hs |].
       constructor; [ intros HH; inversion HH | constructor ].
+  Qed.
+
+  (** *** Tonelli, specialized to a product index
+
+      The dependent-sum form of [tcp_sum_sigma] reindexed along
+      [sigT (fun _ => A) ~= K * A]. *)
+
+  Lemma tcp_sum_pair {X} {K A : Type} (F : K -> A -> tcp X) :
+    (forall k, tcp_summable (F k)) ->
+    tcp_summable (fun k => tcp_sum (F k)) ->
+    tcp_summable (fun p : K * A => F (fst p) (snd p)) /\
+    tcp_sum (fun k => tcp_sum (F k))
+    = tcp_sum (fun p : K * A => F (fst p) (snd p)).
+  Proof.
+    intros Hk Hit.
+    destruct (tcp_sum_sigma X K (fun _ : K => A) F Hk Hit) as [Hs Heq].
+    (* [sigT (fun _ => A)] and [K * A] are in bijection *)
+    destruct (tcp_sum_bij X (sigT (fun _ : K => A)) (K * A)
+                (fun p : K * A => existT (fun _ : K => A) (fst p) (snd p))
+                (fun q : sigT (fun _ : K => A) => (projT1 q, projT2 q))
+                (fun q => F (projT1 q) (projT2 q))
+                (fun p => match p with (k, a) => eq_refl end)
+                (fun q => match q with existT _ k a => eq_refl end)
+                Hs) as [Hs2 Heq2].
+    split; [ exact Hs2 | rewrite Heq, <- Heq2; reflexivity ].
+  Qed.
+
+  (** Exchanging the two indices of a double sum. *)
+  Lemma tcp_sum_swap {X} {K A : Type} (F : K -> A -> tcp X) :
+    (forall k, tcp_summable (F k)) ->
+    tcp_summable (fun k => tcp_sum (F k)) ->
+    (forall a, tcp_summable (fun k => F k a)) ->
+    tcp_summable (fun a => tcp_sum (fun k => F k a)) ->
+    tcp_sum (fun k => tcp_sum (F k))
+    = tcp_sum (fun a => tcp_sum (fun k => F k a)).
+  Proof.
+    intros H1 H2 H3 H4.
+    destruct (tcp_sum_pair F H1 H2) as [_ Heq1].
+    destruct (tcp_sum_pair (fun a k => F k a) H3 H4) as [Hs2 Heq2].
+    rewrite Heq1, Heq2.
+    (* the two product indexings differ by the swap *)
+    destruct (tcp_sum_bij X (A * K) (K * A)
+                (fun p : K * A => (snd p, fst p))
+                (fun q : A * K => (snd q, fst q))
+                (fun q : A * K => F (snd q) (fst q))
+                (fun p => match p with (k, a) => eq_refl end)
+                (fun q => match q with (a, k) => eq_refl end)
+                Hs2) as [_ Heq3].
+    rewrite <- Heq3; reflexivity.
   Qed.
 
   (** The everywhere-zero family sums to zero. *)

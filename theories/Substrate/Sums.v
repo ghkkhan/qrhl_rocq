@@ -763,6 +763,24 @@ Proof.
     | constructor; [ intros H; inversion H | constructor ] ].
 Qed.
 
+(** A family that is a single constant at one index and zero elsewhere. *)
+Lemma tsum_single_val {I : Type} (i0 : I) (c : R) :
+  (0 <= c)%R ->
+  summable (fun i => if excluded_middle_informative (i = i0) then c else 0%R)
+  /\ tsum (fun i => if excluded_middle_informative (i = i0) then c else 0%R) = c.
+Proof.
+  intros Hc.
+  assert (Heq : (fun i => if excluded_middle_informative (i = i0) then c else 0%R)
+                = (fun i => (c * indicator i0 i)%R)).
+  { apply funext; intros i; unfold indicator.
+    destruct (excluded_middle_informative (i = i0)); lra. }
+  rewrite Heq; split.
+  - apply summable_scale;
+      [ exact Hc | apply indicator_nonneg | apply summable_indicator ].
+  - rewrite (tsum_scale c (indicator i0) Hc (indicator_nonneg i0)
+               (summable_indicator i0)), tsum_indicator; lra.
+Qed.
+
 Lemma ddirac_total {I} (i : I) : dtotal (ddirac i).
 Proof. unfold dtotal, ddirac; simpl; apply tsum_indicator. Qed.
 

@@ -47,6 +47,69 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Definition rcqs_projR (r : rcqs) : cqs :=
     fun m2 => tcp_sum (fun m1 : cmem => rtcpR (r (m1, m2))).
 
+  (** Each projection is again a well-formed cq-state, and its trace at a
+      memory is the total over the other side. *)
+
+  Lemma rcqs_slice_wf (r : rcqs) (m1 : cmem) :
+    rcqs_wf r -> tcp_summable (fun m2 : cmem => rtcpL (r (m1, m2))).
+  Proof.
+    intros Hr; apply rtcpL_summable.
+    apply (tcp_summable_trace _ _ (fun m2 : cmem => r (m1, m2))).
+    apply (summable_inj (fun m2 : cmem => (m1, m2))
+                        (fun rm => tcp_trace (r rm)));
+      [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hr ].
+  Qed.
+
+  Lemma rcqs_slice_wf_R (r : rcqs) (m2 : cmem) :
+    rcqs_wf r -> tcp_summable (fun m1 : cmem => rtcpR (r (m1, m2))).
+  Proof.
+    intros Hr; apply rtcpR_summable.
+    apply (tcp_summable_trace _ _ (fun m1 : cmem => r (m1, m2))).
+    apply (summable_inj (fun m1 : cmem => (m1, m2))
+                        (fun rm => tcp_trace (r rm)));
+      [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hr ].
+  Qed.
+
+  Lemma rcqs_projL_trace (r : rcqs) (m1 : cmem) :
+    rcqs_wf r ->
+    tcp_trace (rcqs_projL r m1) = tsum (fun m2 => tcp_trace (r (m1, m2))).
+  Proof.
+    intros Hr; unfold rcqs_projL.
+    rewrite (tcp_trace_sum _ _ _ (rcqs_slice_wf r m1 Hr)).
+    f_equal; apply funext; intros m2; apply rtcpL_trace.
+  Qed.
+
+  Lemma rcqs_projR_trace (r : rcqs) (m2 : cmem) :
+    rcqs_wf r ->
+    tcp_trace (rcqs_projR r m2) = tsum (fun m1 => tcp_trace (r (m1, m2))).
+  Proof.
+    intros Hr; unfold rcqs_projR.
+    rewrite (tcp_trace_sum _ _ _ (rcqs_slice_wf_R r m2 Hr)).
+    f_equal; apply funext; intros m1; apply rtcpR_trace.
+  Qed.
+
+  Lemma rcqs_pairs_summable (r : rcqs) :
+    rcqs_wf r ->
+    summable (fun p : cmem * cmem => tcp_trace (r (fst p, snd p))).
+  Proof.
+    intros Hr.
+    assert (Heq : (fun p : cmem * cmem => tcp_trace (r (fst p, snd p)))
+                  = (fun rm : rcmem => tcp_trace (r rm)))
+      by (apply funext; intros [u v]; reflexivity).
+    rewrite Heq; apply tcp_summable_trace; exact Hr.
+  Qed.
+
+  Lemma rcqs_projL_wf (r : rcqs) : rcqs_wf r -> cqs_wf (rcqs_projL r).
+  Proof.
+    intros Hr; apply tcp_summable_trace.
+    assert (Heq : (fun m1 => tcp_trace (rcqs_projL r m1))
+                  = (fun m1 => tsum (fun m2 => tcp_trace (r (m1, m2)))))
+      by (apply funext; intros m1; apply rcqs_projL_trace; exact Hr).
+    rewrite Heq.
+    apply (tsum_iter_le_pairs (fun m1 m2 => tcp_trace (r (m1, m2))));
+      [ intros p; apply tcp_trace_nonneg | apply rcqs_pairs_summable; exact Hr ].
+  Qed.
+
   (* ================================================================= *)
   (** ** Predicates (Definition 13) *)
 

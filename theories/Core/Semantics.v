@@ -153,11 +153,20 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   (** [[x <- e]] (proj(|m>) (x) rho_m) := proj(|m(x := [e]_m)>) (x) rho_m.
 
       At target [m'], sum over the old values [a] of [x] that [e] sends back to
-      [m' x]. *)
+      [m' x]. The condition is carried as an [if] rather than as a subset type
+      so that the index is uniformly [ctype x], the same as for sampling and
+      measurement. That uniformity is what lets all three clauses be handled by
+      the same reindexing, and it is what makes rule Assign1's projections
+      provable without dependent-pair equality. *)
+
+  Definition acond (x : cvar) (e : expr (ctype x)) (m' : cmem) (a : ctype x)
+    : Prop := m' x = ev e (cupd m' x a).
+
   Definition sem_assign (x : cvar) (e : expr (ctype x)) (r : cqs) : cqs :=
     fun m' =>
-      tcp_sum (fun a : { a : ctype x | ev e (cupd m' x a) = m' x } =>
-                 r (cupd m' x (proj1_sig a))).
+      tcp_sum (fun a : ctype x =>
+                 if excluded_middle_informative (acond x e m' a)
+                 then r (cupd m' x a) else tcp_zero).
 
   (** [[x <-$ e]] (proj(|m>) (x) rho_m) := sum_z [e]_m(z) proj(|m(x := z)>) (x) rho_m. *)
   Definition sem_sample (x : cvar) (e : expr (distr (ctype x))) (r : cqs) : cqs :=
@@ -252,23 +261,27 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       by (unfold m0; rewrite cupd_cupd; apply cupd_id).
     apply funext; intros m'; cbn [denote]; unfold sem_assign.
     destruct (excluded_middle_informative (m' = m0)) as [-> | Hne].
-    - (* the image memory: exactly one preimage, [a := m x] *)
-      rewrite cqdirac_same.
-      assert (Hx : ev e (cupd m0 x (m x)) = m0 x)
-        by (rewrite Hback, Hm0x; reflexivity).
-      rewrite (tcp_sum_singleton _ (exist _ (m x) Hx)).
-      + cbn [proj1_sig]; rewrite Hback; apply cqdirac_same.
-      + intros [a Ha] Hj; cbn [proj1_sig].
+    - (* the image memory: the guard holds at exactly one old value *)
+      rewrite cqdirac_same, (tcp_sum_singleton _ (m x)).
+      + destruct (excluded_middle_informative (acond x e m0 (m x)))
+          as [_ | Hno].
+        * rewrite Hback; apply cqdirac_same.
+        * exfalso; apply Hno; unfold acond; rewrite Hback, Hm0x; reflexivity.
+      + intros a Hane.
+        destruct (excluded_middle_informative (acond x e m0 a)) as [_ | _];
+          [| reflexivity ].
         apply cqdirac_other; intros Heq.
-        apply Hj, sig_eq; cbn [proj1_sig].
-        rewrite <- (cupd_same m0 x a), Heq; reflexivity.
-    - (* any other memory: every term vanishes *)
+        apply Hane; rewrite <- (cupd_same m0 x a), Heq; reflexivity.
+    - (* any other memory: the guard and the point mass cannot both fire *)
       rewrite cqdirac_other by exact Hne.
-      apply tcp_sum_zero; intros [a Ha]; cbn [proj1_sig].
+      apply tcp_sum_zero; intros a.
+      destruct (excluded_middle_informative (acond x e m' a)) as [Hc | _];
+        [| reflexivity ].
       apply cqdirac_other; intros Heq.
-      apply Hne; transitivity (cupd m x (m' x)).
+      apply Hne; unfold acond in Hc.
+      transitivity (cupd m x (m' x)).
       + rewrite <- Heq, cupd_cupd, cupd_id; reflexivity.
-      + unfold m0; f_equal; rewrite <- Ha, Heq; reflexivity.
+      + unfold m0; f_equal; rewrite Hc, Heq; reflexivity.
   Qed.
 
   Lemma denote_qapply_dirac (P : qset) (e : expr (op (qsub P) (qsub P))) m rho :
@@ -376,73 +389,6 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ----------------------------------------------------------------- *)
-  (** *** Assignment
-
-      The preimage of [m'] is indexed by the old value of [x] subject to
-      [[e](m'(x := a)) = m' x], and that side condition is what makes the map
-      to source memories injective: it pins [m' x] down. *)
-
-  Section AssignWf.
-    Context (x : cvar) (e : expr (ctype x)).
-
-    Let Pre (m' : cmem) : Type := { a : ctype x | ev e (cupd m' x a) = m' x }.
-    Let src (m' : cmem) (a : Pre m') : cmem := cupd m' x (proj1_sig a).
-
-    Lemma assign_src_fib (m' : cmem) (a b : Pre m') : src m' a = src m' b -> a = b.
-    Proof.
-      unfold src; destruct a as [a Ha], b as [b Hb]; cbn [proj1_sig].
-      intros Heq; apply sig_eq; cbn [proj1_sig].
-      rewrite <- (cupd_same m' x a), Heq, cupd_same; reflexivity.
-    Qed.
-
-    Lemma assign_src_sep (m1 : cmem) (a : Pre m1) (m2 : cmem) (b : Pre m2) :
-      src m1 a = src m2 b -> m1 = m2.
-    Proof.
-      unfold src; destruct a as [a Ha], b as [b Hb]; cbn [proj1_sig].
-      intros Heq; apply funext; intros y.
-      destruct (cvar_eq_dec x y) as [Hxy | Hne].
-      - subst y; rewrite <- Ha, <- Hb, Heq; reflexivity.
-      - rewrite <- (cupd_other m1 x y a Hne), Heq.
-        apply cupd_other; exact Hne.
-    Qed.
-
-    Lemma assign_inner_wf (r : cqs) (m' : cmem) :
-      cqs_wf r -> tcp_summable (fun a : Pre m' => r (src m' a)).
-    Proof.
-      intros Hr; apply tcp_summable_trace.
-      apply (summable_inj (src m') (fun m => tcp_trace (r m))).
-      - apply assign_src_fib.
-      - apply cqs_wf_iff; exact Hr.
-    Qed.
-
-    Lemma assign_trace (r : cqs) (m' : cmem) :
-      cqs_wf r ->
-      tcp_trace (sem_assign x e r m')
-      = tsum (fun a : Pre m' => tcp_trace (r (src m' a))).
-    Proof.
-      intros Hr; apply tcp_trace_sum, assign_inner_wf; exact Hr.
-    Qed.
-
-    Lemma sem_assign_wf_trace (r : cqs) :
-      cqs_wf r ->
-      cqs_wf (sem_assign x e r)
-      /\ (cqs_trace (sem_assign x e r) <= cqs_trace r)%R.
-    Proof.
-      intros Hr.
-      assert (Heq : (fun m' => tcp_trace (sem_assign x e r m'))
-                    = (fun m' => tsum (fun a : Pre m' => tcp_trace (r (src m' a)))))
-        by (apply funext; intros m'; apply assign_trace; exact Hr).
-      destruct (tsum_partition_le Pre src assign_src_sep assign_src_fib
-                  (fun m => tcp_trace (r m)) (cqs_trace_fn_nonneg r)
-                  (proj1 (cqs_wf_iff r) Hr)) as [Hs Hle].
-      split.
-      - apply cqs_wf_iff; rewrite Heq; exact Hs.
-      - unfold cqs_trace; rewrite Heq; exact Hle.
-    Qed.
-
-  End AssignWf.
-
-  (* ----------------------------------------------------------------- *)
   (** *** The reindexing shared by sampling and measurement
 
       At target [m'] the summand is indexed by the old value [a] of [x], and
@@ -474,6 +420,106 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Proof.
     intros H; rewrite <- (cupd_same m x a), H, cupd_same; reflexivity.
   Qed.
+
+  (* ----------------------------------------------------------------- *)
+  (** *** Assignment
+
+      Same shape as sampling below: at a target the summand is indexed by the
+      old value of [x], and the pair (target, old value) is in bijection with
+      (source, old value of the target's [x]) via [sbeta]. Under that
+      bijection the guard [acond] becomes "the source's [x] is what [e] says",
+      which is satisfied at exactly one value -- so the inner sum collapses. *)
+
+  Section AssignWf.
+    Context (x : cvar) (e : expr (ctype x)).
+
+    Lemma assign_inner_wf (r : cqs) (m' : cmem) :
+      cqs_wf r ->
+      tcp_summable (fun a : ctype x =>
+                      if excluded_middle_informative (acond x e m' a)
+                      then r (cupd m' x a) else tcp_zero).
+    Proof.
+      intros Hr; apply tcp_summable_trace.
+      apply (summable_mono _ (fun a : ctype x => tcp_trace (r (cupd m' x a)))).
+      - apply (summable_inj (fun a : ctype x => cupd m' x a)
+                            (fun m => tcp_trace (r m)));
+          [ intros a b H; apply (cupd_inj x m'); exact H
+          | apply cqs_wf_iff; exact Hr ].
+      - intros a; destruct (excluded_middle_informative (acond x e m' a));
+          [ apply Rle_refl | rewrite tcp_trace_zero; apply tcp_trace_nonneg ].
+    Qed.
+
+    Lemma assign_trace (r : cqs) (m' : cmem) :
+      cqs_wf r ->
+      tcp_trace (sem_assign x e r m')
+      = tsum (fun a : ctype x =>
+                if excluded_middle_informative (acond x e m' a)
+                then tcp_trace (r (cupd m' x a)) else 0%R).
+    Proof.
+      intros Hr; unfold sem_assign.
+      rewrite (tcp_trace_sum _ _ _ (assign_inner_wf r m' Hr)).
+      f_equal; apply funext; intros a.
+      destruct (excluded_middle_informative (acond x e m' a));
+        [ reflexivity | apply tcp_trace_zero ].
+    Qed.
+
+    Lemma sem_assign_wf_trace (r : cqs) :
+      cqs_wf r ->
+      cqs_wf (sem_assign x e r)
+      /\ (cqs_trace (sem_assign x e r) <= cqs_trace r)%R.
+    Proof.
+      intros Hr.
+      pose (Ga := fun (m' : cmem) (a : ctype x) =>
+                    if excluded_middle_informative (acond x e m' a)
+                    then tcp_trace (r (cupd m' x a)) else 0%R).
+      pose (Hsrc := fun (m : cmem) (z : ctype x) =>
+                      if excluded_middle_informative (z = ev e m)
+                      then tcp_trace (r m) else 0%R).
+      assert (HGH : (fun p : cmem * ctype x => Ga (fst p) (snd p))
+                    = (fun p : cmem * ctype x =>
+                         Hsrc (fst (sbeta x p)) (snd (sbeta x p))))
+        by (apply funext; intros p; reflexivity).
+      assert (HsrcS : forall m, summable (Hsrc m))
+        by (intros m; apply (proj1 (tsum_single_val (ev e m) (tcp_trace (r m))
+                                      (tcp_trace_nonneg _ _)))).
+      assert (HsrcB : forall m, tsum (Hsrc m) = tcp_trace (r m))
+        by (intros m; apply (proj2 (tsum_single_val (ev e m) (tcp_trace (r m))
+                                      (tcp_trace_nonneg _ _)))).
+      assert (HsrcIt : summable (fun m => tsum (Hsrc m))).
+      { apply (summable_mono _ (fun m => tcp_trace (r m)));
+          [ apply cqs_wf_iff; exact Hr
+          | intros m; rewrite HsrcB; apply Rle_refl ]. }
+      destruct (tsum_pairs_le_iter Hsrc HsrcS HsrcIt) as [HsrcPS HsrcPB].
+      assert (HGS : summable (fun p : cmem * ctype x => Ga (fst p) (snd p))).
+      { rewrite HGH.
+        apply (summable_inj (sbeta x)
+                 (fun q : cmem * ctype x => Hsrc (fst q) (snd q)));
+          [ apply sbeta_inj | exact HsrcPS ]. }
+      assert (HGpos : nonneg (fun p : cmem * ctype x => Ga (fst p) (snd p))).
+      { intros p; unfold Ga.
+        destruct (excluded_middle_informative (acond x e (fst p) (snd p)));
+          [ apply tcp_trace_nonneg | apply Rle_refl ]. }
+      destruct (tsum_iter_le_pairs Ga HGpos HGS) as [HGit HGitB].
+      assert (Heq : (fun m' => tcp_trace (sem_assign x e r m'))
+                    = (fun m' => tsum (Ga m')))
+        by (apply funext; intros m'; apply assign_trace; exact Hr).
+      split.
+      - apply cqs_wf_iff; rewrite Heq; exact HGit.
+      - unfold cqs_trace; rewrite Heq.
+        eapply Rle_trans; [ exact HGitB |].
+        rewrite HGH.
+        eapply Rle_trans.
+        + apply (tsum_inj_le (sbeta x)
+                   (fun q : cmem * ctype x => Hsrc (fst q) (snd q))
+                   (sbeta_inj x) HsrcPS).
+        + eapply Rle_trans; [ exact HsrcPB |].
+          apply tsum_mono;
+            [ intros m; rewrite HsrcB; apply tcp_trace_nonneg
+            | apply cqs_wf_iff; exact Hr
+            | intros m; rewrite HsrcB; apply Rle_refl ].
+    Qed.
+
+  End AssignWf.
 
   (* ----------------------------------------------------------------- *)
   (** *** Sampling *)

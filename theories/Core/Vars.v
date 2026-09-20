@@ -227,4 +227,31 @@ Module VarTheory (V : PROGRAM_VARS).
     | SR => (fst rm, cupd (snd rm) (snd rx) a)
     end.
 
+  (** *** Updating one side
+
+      All four are definitional once the pair is destructed; they are named
+      because the rules that assign on one side use them constantly. *)
+
+  Lemma csel_rcupd_L (rm : rcmem) (x : cvar) (a : ctype x) :
+    csel SL (rcupd rm (SL, x) a) = cupd (csel SL rm) x a.
+  Proof. destruct rm; reflexivity. Qed.
+
+  Lemma csel_rcupd_L_other (rm : rcmem) (x : cvar) (a : ctype x) :
+    csel SR (rcupd rm (SL, x) a) = csel SR rm.
+  Proof. destruct rm; reflexivity. Qed.
+
+  Lemma rcupd_rcupd_L (rm : rcmem) (x : cvar) (a b : ctype x) :
+    rcupd (rcupd rm (SL, x) a) (SL, x) b = rcupd rm (SL, x) b.
+  Proof.
+    destruct rm as [u v]; cbn [rcupd fst snd].
+    rewrite cupd_cupd; reflexivity.
+  Qed.
+
+  Lemma rcupd_id_L (rm : rcmem) (x : cvar) :
+    rcupd rm (SL, x) (csel SL rm x) = rm.
+  Proof.
+    destruct rm as [u v]; cbn [rcupd csel fst snd].
+    rewrite cupd_id; reflexivity.
+  Qed.
+
 End VarTheory.

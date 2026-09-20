@@ -78,8 +78,8 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
-| 1d | `Skip`, `Conseq`, `Seq`, `QApply1` | **done** |
-| 1d | the other 9 vertical-slice rules | in progress, see below |
+| 1d | `Skip`, `Conseq`, `Seq`, `QApply1`, `Assign1` | **done** |
+| 1d | the other 8 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
@@ -117,10 +117,28 @@ while the identity in question has a general vector in the middle. Defining it
 this way costs nothing for the rules, since "on side *i*" is exactly what the
 paper's `idx_i` means. The two notions have to be reconciled only for Lemma 32.
 
-Still to do in Phase 1d: `Assign1`, `Sample1`, `If1`, `JointIf`, `JointSample`,
-`QInit1`, `Measure1`, `JointMeasureSimple`, `Case`. The classical ones and the
-measurement ones need the converse of Lemma 36, or equivalently the same sum
-bookkeeping applied to reassembling per-outcome witnesses.
+`Assign1` is also proved, which exercised the other half of the machinery: the
+witness is a pushforward, so its two projections need sums to be pushed through
+partial traces and reassociated. That needed normality of `tcp_sum` and
+operator-level Tonelli in the signature, and it drove one change to the
+semantics — `sem_assign` now carries its guard as an `if` rather than as a
+subset type, so that the index is uniformly `ctype x`, the same as for sampling
+and measurement. That uniformity is what makes the projections provable without
+dependent-pair equality, and it makes all three clauses follow one pattern.
+
+Worth recording about `Assign1`: the guard is *not* satisfied at a single old
+value — if `e` is constant it holds for every one. What is true is that
+(target, old value) is in bijection with (source, the target's old `x`), and
+under that bijection the guard becomes "this is what `e` says of the source",
+which *is* unique. So the sum collapses after reindexing, not before, and that
+is exactly why the right-hand projection comes back unchanged.
+
+Still to do in Phase 1d: `Sample1`, `JointSample`, `If1`, `JointIf`, `Case`,
+`QInit1`, `Measure1`, `JointMeasureSimple`. `Sample1` follows `Assign1` with
+subdistribution weights. `QInit1` needs abstract superoperators, since
+initialization is a channel rather than a conjugation. The measurement rules
+and `Case` need per-outcome witnesses reassembled — the same machinery as the
+converse of Lemma 36.
 
 ### Two smaller gaps in §4.4
 
