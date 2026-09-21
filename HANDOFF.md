@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit (pending). Seventeen of the paper's rules are proved,
+Last updated at commit `7f69f69`. Seventeen of the paper's rules are proved,
 with no admits and no axioms outside the substrate signature.
 
 ---
@@ -569,7 +569,7 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
-| (pending) | `op_ext_ket` (replacing `op_ext`); `Sym` (Lem 44); `Urqswap`, `predswap`, `rcqs_swap`; two new axioms (`tcp_ptrace_pswap`, `tcp_conj_pswap`) |
+| `7f69f69` | `op_ext_ket` (replacing `op_ext`); `Sym` (Lem 44); `Urqswap`, `predswap`, `rcqs_swap`; two new axioms (`tcp_ptrace_pswap`, `tcp_conj_pswap`) |
 | `3a869ab` | `JointSample` (Lem 57); `Core/Vars.v` right/cross-side `rcupd` mirrors; `Core/Judgment.v` `rbeta2`; `Substrate/Sums.v` marginals |
 | `8563c58` | `JointWhile` (Lem 61) |
 | `f343d18` | the three `denote` inductions now cover loops; `loopfree` retired |
