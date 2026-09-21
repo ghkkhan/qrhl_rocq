@@ -507,6 +507,60 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     unfold qL; symmetry; apply Ubij_ket.
   Qed.
 
+  (** [rUsplit_qidx_SL_ket] lifted off kets to the full operator, via
+      [op_ext_ket]: the reassociation between [rqsub (qidx SL Q) * rqsub
+      (rqneg (qidx SL Q))] and [(qsub Q * qsub (qneg Q)) * qmem] is itself a
+      [Ubij] -- built the same way as [Urelab], by pure computation once the
+      side is concrete, no disjoint-union combinator needed. *)
+  Definition Uassoc_fwd (Q : qset)
+      (vp : rqsub (qidx SL Q) * rqsub (rqneg (qidx SL Q)))
+    : (qsub Q * qsub (qneg Q)) * qmem :=
+    ((Urelab_fwd SL Q (fst vp), fun q => snd vp (SL, q)), fun q => snd vp (SR, q)).
+
+  Definition Uassoc_bwd (Q : qset)
+      (vp : (qsub Q * qsub (qneg Q)) * qmem)
+    : rqsub (qidx SL Q) * rqsub (rqneg (qidx SL Q)) :=
+    (Urelab_bwd SL Q (fst (fst vp)),
+     fun w => match w as w' return (if rqneg (qidx SL Q) w' then rqtype w' else unit) with
+              | (SL, q) => snd (fst vp) q
+              | (SR, q) => snd vp q
+              end).
+
+  Lemma Uassoc_fwd_bwd (Q : qset) (vp : (qsub Q * qsub (qneg Q)) * qmem) :
+    Uassoc_fwd Q (Uassoc_bwd Q vp) = vp.
+  Proof. destruct vp as [[qL qLc] qR]; reflexivity. Qed.
+
+  Lemma Uassoc_bwd_fwd (Q : qset) (vp : rqsub (qidx SL Q) * rqsub (rqneg (qidx SL Q))) :
+    Uassoc_bwd Q (Uassoc_fwd Q vp) = vp.
+  Proof.
+    destruct vp as [vq vw]; unfold Uassoc_fwd, Uassoc_bwd; cbn [fst snd]; f_equal.
+    - apply Urelab_bwd_fwd.
+    - apply funext; intros [t q]; destruct t; reflexivity.
+  Qed.
+
+  Definition Uassoc (Q : qset)
+    : op (rqsub (qidx SL Q) * rqsub (rqneg (qidx SL Q))) ((qsub Q * qsub (qneg Q)) * qmem) :=
+    Ubij (Uassoc_fwd Q) (Uassoc_bwd Q) (Uassoc_bwd_fwd Q) (Uassoc_fwd_bwd Q).
+
+  Lemma Uassoc_unitary (Q : qset) : ounitary (Uassoc Q).
+  Proof. apply Ubij_ounitary. Qed.
+
+  Lemma rUsplit_qidx_SL (Q : qset) :
+    rUsplit (qidx SL Q) = ocomp (oadj Urqpair) (ocomp (tensoro (Usplit Q) oid) (Uassoc Q)).
+  Proof.
+    apply op_ext_ket; intros [vq vw].
+    transitivity (oapp (oadj Urqpair)
+                    (oapp (tensoro (Usplit Q) oid)
+                       (tensorv (tensorv (oapp (Urelab SL Q) (ket vq)) (ket (fun q => vw (SL, q))))
+                                (ket (fun q => vw (SR, q)))))).
+    { rewrite <- tensorv_ket; apply rUsplit_qidx_SL_ket. }
+    unfold Urelab; rewrite Ubij_ket; rewrite !tensorv_ket.
+    change ((Urelab_fwd SL Q vq, fun q => vw (SL, q)), fun q => vw (SR, q))
+      with (Uassoc_fwd Q (vq, vw)).
+    rewrite <- (Ubij_ket _ _ (Uassoc_fwd Q) (Uassoc_bwd Q) (Uassoc_bwd_fwd Q) (Uassoc_fwd_bwd Q)).
+    rewrite !oapp_ocomp; unfold Uassoc; reflexivity.
+  Qed.
+
   (** The side swap on [rqmem], as a [Ubij]. Composing it with [Urqpair] and
       composing [Urqpair] with the factor swap [Uswap] agree -- both send
       [rqmem]'s [(V1,V2)] pairing to [(V2,V1)] -- which is an index
