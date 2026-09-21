@@ -88,6 +88,33 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     apply (tcp_summable_singleton _ m); intros m' H; apply cqdirac_other; exact H.
   Qed.
 
+  (** A point mass's total trace is its one block's trace. *)
+  Lemma cqdirac_trace (m : cmem) (rho : tcp qmem) : cqs_trace (cqdirac m rho) = tcp_trace rho.
+  Proof.
+    unfold cqs_trace.
+    assert (Heq : (fun m' => tcp_trace (cqdirac m rho m'))
+                  = (fun m' => if excluded_middle_informative (m' = m)
+                               then tcp_trace rho else 0%R)).
+    { apply funext; intros m'; unfold cqdirac.
+      destruct (excluded_middle_informative (m' = m)); [ reflexivity | apply tcp_trace_zero ]. }
+    rewrite Heq; apply (proj2 (tsum_single_val m (tcp_trace rho) (tcp_trace_nonneg _ rho))).
+  Qed.
+
+  (** Scaling keeps a cq-state well-formed, and scales its total trace --
+      needed by the converse of Lemma 36's joint-summability bookkeeping. *)
+  Lemma cqs_scale_wf (a : R) (r : cqs) : (0 <= a)%R -> cqs_wf r -> cqs_wf (cqs_scale a r).
+  Proof. intros Ha Hr; apply (tcp_summable_scale a r Ha Hr). Qed.
+
+  Lemma cqs_trace_scale (a : R) (r : cqs) :
+    (0 <= a)%R -> cqs_wf r -> cqs_trace (cqs_scale a r) = (a * cqs_trace r)%R.
+  Proof.
+    intros Ha Hr; unfold cqs_trace, cqs_scale.
+    assert (Heq : (fun m => tcp_trace (tcp_scale a (r m))) = (fun m => (a * tcp_trace (r m))%R))
+      by (apply funext; intros m; apply tcp_trace_scale).
+    rewrite Heq; apply tsum_scale;
+      [ exact Ha | intros m; apply tcp_trace_nonneg | apply tcp_summable_trace; exact Hr ].
+  Qed.
+
   (** Scaling a point mass scales its one nonzero block, needed by the
       converse of Lemma 36: the per-component witnesses it assembles are
       scaled point masses. *)

@@ -944,6 +944,18 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     - rewrite rdirac_other by exact Hne; apply rsep_zero.
   Qed.
 
+  (** A point mass's total trace is its one block's trace. *)
+  Lemma rdirac_trace rm rho : rcqs_trace (rdirac rm rho) = tcp_trace rho.
+  Proof.
+    unfold rcqs_trace.
+    assert (Heq : (fun rm' => tcp_trace (rdirac rm rho rm'))
+                  = (fun rm' => if excluded_middle_informative (rm' = rm)
+                                then tcp_trace rho else 0%R)).
+    { apply funext; intros rm'; unfold rdirac.
+      destruct (excluded_middle_informative (rm' = rm)); [ reflexivity | apply tcp_trace_zero ]. }
+    rewrite Heq; apply (proj2 (tsum_single_val rm (tcp_trace rho) (tcp_trace_nonneg _ rho))).
+  Qed.
+
   (** A pure product state across the two sides: the paper's [psi_1 (x) psi_2]
       viewed in [l2[V1^qu V2^qu]]. *)
   Definition rprod (v w : l2 qmem) : l2 rqmem :=
@@ -1014,6 +1026,37 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         reflexivity. }
       rewrite Htens, tcp_conj_scale, <- rprod_proj.
       reflexivity.
+  Qed.
+
+  (** A pure product's self-inner-product is the product of the factors':
+      [Urqpair]'s adjoint is an isometry, so it preserves inner products, and
+      [tensorv] is bilinear on them. In particular a product of two unit
+      vectors is again a unit vector -- needed by the converse of Lemma 36 to
+      know its assembled witnesses' inputs are normalized point masses. *)
+  Lemma inner_rprod (v w : l2 qmem) :
+    inner (rprod v w) (rprod v w) = Cmult (inner v v) (inner w w).
+  Proof.
+    unfold rprod.
+    rewrite (oisometry_inner (oadj Urqpair) (tensorv v w) (tensorv v w)
+               (oisometry_oadj Urqpair Urqpair_unitary)).
+    apply inner_tensorv.
+  Qed.
+
+  Lemma inner_rprod_unit (u u' : l2 qmem) :
+    inner u u = C1 -> inner u' u' = C1 -> inner (rprod u u') (rprod u u') = C1.
+  Proof. intros Hu Hu'; rewrite inner_rprod, Hu, Hu'; ring. Qed.
+
+  (** The trace of a scaled unit pure product's projection is exactly the
+      scale -- the per-component fact the converse of Lemma 36 uses to relate
+      its assembled witnesses' joint summability back to the original
+      state's. *)
+  Lemma tcp_trace_scale_proj_rprod_unit (a : R) (u u' : l2 qmem) :
+    inner u u = C1 -> inner u' u' = C1 ->
+    tcp_trace (tcp_scale a (tcp_proj (rprod u u'))) = a.
+  Proof.
+    intros Hu Hu'.
+    rewrite tcp_trace_scale, tcp_trace_proj, (inner_rprod_unit u u' Hu Hu').
+    replace (Cre C1) with 1%R by reflexivity; ring.
   Qed.
 
   (** The spectral theorem, pushed through separability: a separable

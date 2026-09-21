@@ -1223,6 +1223,11 @@ Module HTheory (S : HILBERT_SUBSTRATE).
         * exfalso; apply Hno; exact (inhabits j).
   Qed.
 
+  (** The everywhere-zero family is summable, with no inhabitedness needed
+      (unlike [tcp_summable_singleton]). *)
+  Lemma tcp_summable_zero {X J} : tcp_summable (fun _ : J => @tcp_zero X).
+  Proof. apply tcp_summable_trace, summable_zero; intros j; apply tcp_trace_zero. Qed.
+
   (* ================================================================= *)
   (** ** Division
 
