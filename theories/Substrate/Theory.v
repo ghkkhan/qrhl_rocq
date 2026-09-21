@@ -902,6 +902,20 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply tcp_trace_faithful; rewrite tcp_trace_scale, tcp_trace_zero; ring.
   Qed.
 
+  (** Scaling a summable family by a nonnegative constant keeps it summable --
+      needed by the converse of Lemma 36, whose assembled witness scales a
+      per-component family before summing it. *)
+  Lemma tcp_summable_scale {X J} (a : R) (F : J -> tcp X) :
+    (0 <= a)%R -> tcp_summable F -> tcp_summable (fun j => tcp_scale a (F j)).
+  Proof.
+    intros Ha H; apply tcp_summable_trace.
+    assert (Heq : (fun j => tcp_trace (tcp_scale a (F j)))
+                  = (fun j => (a * tcp_trace (F j))%R))
+      by (apply funext; intros j; apply tcp_trace_scale).
+    rewrite Heq; apply summable_scale;
+      [ exact Ha | intros j; apply tcp_trace_nonneg | apply tcp_summable_trace; exact H ].
+  Qed.
+
   Lemma tcp_ptrace_zero {X Y} : tcp_ptrace (@tcp_zero (X * Y)) = tcp_zero.
   Proof.
     apply tcp_trace_faithful; rewrite tcp_ptrace_trace; apply tcp_trace_zero.

@@ -175,6 +175,23 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     intros Hle Hsat rm; eapply hle_trans; [ apply Hsat | apply Hle ].
   Qed.
 
+  (** Scaling by a nonnegative constant keeps a relational state well-formed
+      and, if it already satisfied a predicate, keeps it satisfying it --
+      needed by the converse of Lemma 36, whose witness scales each
+      per-component witness before summing them. *)
+  Lemma rcqs_scale_wf (a : R) (r : rcqs) : (0 <= a)%R -> rcqs_wf r -> rcqs_wf (rcqs_scale a r).
+  Proof. intros Ha Hr; apply (tcp_summable_scale a r Ha Hr). Qed.
+
+  Lemma rcqs_scale_psat (a : R) (r : rcqs) (B : pred) :
+    (0 <= a)%R -> psat r B -> psat (rcqs_scale a r) B.
+  Proof.
+    intros Ha Hsat rm; unfold rcqs_scale.
+    destruct (classic (a = 0%R)) as [-> | Hane].
+    - rewrite tcp_scale_0, (proj2 (tcp_supp_eq0 _ _) eq_refl); apply hbot_le.
+    - assert (Hpos : (0 < a)%R) by lra.
+      rewrite (tcp_supp_scale _ a _ Hpos); apply Hsat.
+  Qed.
+
   (* ================================================================= *)
   (** ** Swapping a predicate
 

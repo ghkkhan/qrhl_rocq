@@ -260,6 +260,22 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       f_equal; apply funext; intros j; apply tcp_scale_tensor_l.
   Qed.
 
+  (** Scaling preserves separability ([tcp_sep_scale], below, for any real
+      -- rescale one of the two witnessing families). Needed by the converse
+      of Lemma 36, whose witness scales each per-component witness before
+      summing them. *)
+  Lemma rsep_scale (a : R) (r : tcp rqmem) : rsep r -> rsep (tcp_scale a r).
+  Proof.
+    intros Hr; unfold rsep; rewrite tcp_conj_scale; apply tcp_sep_scale; assumption.
+  Qed.
+
+
+  Lemma rcqs_scale_sep (a : R) (r : rcqs) : (0 <= a)%R -> rcqs_sep r -> rcqs_sep (rcqs_scale a r).
+  Proof.
+    intros _ Hr rm; unfold rcqs_scale; apply rsep_scale, Hr.
+  Qed.
+
+
   (* ================================================================= *)
   (* ================================================================= *)
   (** ** The one-sided reindexing
