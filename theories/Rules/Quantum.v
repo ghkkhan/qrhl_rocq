@@ -86,59 +86,76 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
 
       [QInit1]'s witness, unlike every rule in [OneSided], is not a
       conjugation: it discards side 1's copy of the register [P] and tensors
-      in a fresh state, mirroring [sem_qinit] one level up (acting on the
-      first factor of [qmem * qmem] rather than on [qmem] itself). Discarding
-      a register nested inside one factor of a pair needs the plain-product
-      associator [Uprodassoc] to bring that register to the outside where
-      [tcp_ptrace2] can reach it, and to put it back afterwards. *)
+      in a fresh state, mirroring [sem_qinit] itself. [qinit_tcp] is exactly
+      that formula lifted from [cqs] to a bare [tcp qmem]: it stays entirely
+      within [qmem] (a plain two-level [qsub P * qsub (qneg P)] split, never
+      a nested product), so unlike an earlier draft of this section, no
+      associator is needed here at all. The witness acts on one factor of
+      the *relational* state not by conjugating a global operator on
+      [qmem * qmem], but by applying [qinit_tcp] to each piece of the
+      separability witness [rsep] already provides and re-tensoring the
+      untouched side back in -- the same move [rule_Case] makes for its
+      witness, and see HANDOFF.md S7d for the dead end (needing the
+      associator's action on a general entangled tensor argument) this
+      replaced. *)
 
   Section OneSidedDiscard.
     Context (P : qset) (psi : rcmem -> l2 (qsub P))
             (Hpsi : forall rm, inner (psi rm) (psi rm) = C1).
 
-    Definition qinitL_op (rm : rcmem) (rho : tcp (qmem * qmem)) : tcp (qmem * qmem) :=
-      tcp_conj (tensoro (Usplit P) oid)
-        (tcp_conj (oadj Uprodassoc)
-           (tcp_tensor (tcp_proj (psi rm))
-              (tcp_ptrace2 (tcp_conj Uprodassoc
-                 (tcp_conj (tensoro (oadj (Usplit P)) oid) rho))))).
+    Definition qinit_tcp (rm : rcmem) (f : tcp qmem) : tcp qmem :=
+      tcp_conj (Usplit P)
+        (tcp_tensor (tcp_proj (psi rm)) (tcp_ptrace2 (tcp_conj (oadj (Usplit P)) f))).
 
-    Definition qinitL (r : rcqs) : rcqs :=
-      fun rm => tcp_conj (oadj Urqpair) (qinitL_op rm (tcp_conj Urqpair (r rm))).
-
-    (** [qinitL_op] is trace-preserving (not merely non-increasing): every
-        step is conjugation by an isometry except the one place the fresh
-        state is tensored in, and [psi]'s normalization exactly cancels the
-        one place a trace could otherwise change. *)
-    Lemma qinitL_op_trace (rm : rcmem) (rho : tcp (qmem * qmem)) :
-      tcp_trace (qinitL_op rm rho) = tcp_trace rho.
+    (** Trace-preserving (not merely non-increasing): conjugation by an
+        isometry on both sides, and the fresh state's normalization is
+        exactly what makes the middle step contribute a factor of [1]. *)
+    Lemma qinit_tcp_trace (rm : rcmem) (f : tcp qmem) :
+      tcp_trace (qinit_tcp rm f) = tcp_trace f.
     Proof.
-      unfold qinitL_op.
+      unfold qinit_tcp.
       rewrite (tcp_trace_conj_isometry _ _ _ _
-                 (oisometry_tensoro_l (Usplit P)
-                    (ounitary_isometry _ (Wsplit_unitary qvar qtype P)))).
-      rewrite (tcp_trace_conj_isometry _ _ _ _
-                 (oisometry_oadj Uprodassoc Uprodassoc_unitary)).
+                 (ounitary_isometry _ (Wsplit_unitary qvar qtype P))).
       rewrite tcp_trace_tensor, tcp_trace_proj, (Hpsi rm).
       replace (Cre C1) with 1%R by reflexivity; rewrite Rmult_1_l.
       rewrite tcp_ptrace2_trace.
-      rewrite (tcp_trace_conj_isometry _ _ _ _
-                 (ounitary_isometry _ Uprodassoc_unitary)).
       apply (tcp_trace_conj_isometry _ _ _ _
-               (oisometry_tensoro_l (oadj (Usplit P))
-                  (oisometry_oadj (Usplit P) (Wsplit_unitary qvar qtype P)))).
+               (oisometry_oadj (Usplit P) (Wsplit_unitary qvar qtype P))).
     Qed.
 
-    Lemma qinitL_wf (r : rcqs) : rcqs_wf r -> rcqs_wf (qinitL r).
+    Lemma qinit_tcp_scale (rm : rcmem) (a : R) (f : tcp qmem) :
+      qinit_tcp rm (tcp_scale a f) = tcp_scale a (qinit_tcp rm f).
     Proof.
-      intros Hr; apply tcp_summable_trace.
-      assert (Heq : (fun rm => tcp_trace (qinitL r rm)) = (fun rm => tcp_trace (r rm))).
-      { apply funext; intros rm; unfold qinitL.
-        rewrite (tcp_trace_conj_isometry _ _ _ _
-                   (oisometry_oadj Urqpair Urqpair_unitary)).
-        rewrite qinitL_op_trace.
-        apply (tcp_trace_conj_isometry _ _ _ _ (ounitary_isometry _ Urqpair_unitary)). }
-      rewrite Heq; apply tcp_summable_trace; exact Hr.
+      unfold qinit_tcp; rewrite tcp_conj_scale, tcp_ptrace2_scale, <- tcp_scale_tensor_r,
+        tcp_conj_scale; reflexivity.
+    Qed.
+
+    Lemma qinit_tcp_sum (rm : rcmem) {J} (F : J -> tcp qmem) :
+      tcp_summable F ->
+      qinit_tcp rm (tcp_sum F) = tcp_sum (fun j => qinit_tcp rm (F j)).
+    Proof.
+      intros HF.
+      set (A := oadj (Usplit P)).
+      assert (HA : oisometry A) by (apply oisometry_oadj, Wsplit_unitary).
+      assert (HFA : tcp_summable (fun j => tcp_conj A (F j)))
+        by (apply (tcp_summable_conj A _ HA HF)).
+      assert (HFP : tcp_summable (fun j => tcp_ptrace2 (tcp_conj A (F j)))).
+      { apply tcp_summable_trace.
+        apply (summable_mono _ (fun j => tcp_trace (tcp_conj A (F j)))).
+        - apply tcp_summable_trace; exact HFA.
+        - intros j; rewrite tcp_ptrace2_trace; apply Rle_refl. }
+      unfold qinit_tcp; fold A.
+      transitivity (tcp_conj (Usplit P)
+        (tcp_tensor (tcp_proj (psi rm)) (tcp_sum (fun j => tcp_ptrace2 (tcp_conj A (F j)))))).
+      { f_equal; f_equal; f_equal.
+        transitivity (tcp_ptrace2 (tcp_sum (fun j => tcp_conj A (F j)))).
+        - f_equal; apply (tcp_conj_sum _ _ _ _ _ HF).
+        - apply (tcp_ptrace2_sum _ _ _ _ HFA). }
+      transitivity (tcp_conj (Usplit P)
+        (tcp_sum (fun j => tcp_tensor (tcp_proj (psi rm)) (tcp_ptrace2 (tcp_conj A (F j)))))).
+      { f_equal; apply (tcp_tensor_sum_r _ _ _ (tcp_proj (psi rm)) _ HFP). }
+      apply (tcp_conj_sum _ _ _ (Usplit P) _
+               (tcp_summable_tensor_r (tcp_proj (psi rm)) _ HFP)).
     Qed.
 
   End OneSidedDiscard.

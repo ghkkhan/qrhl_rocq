@@ -538,23 +538,6 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   Lemma Uprodassoc_unitary {A B C : Type} : ounitary (@Uprodassoc A B C).
   Proof. apply Ubij_ounitary. Qed.
 
-  (** The named-[Uprodassoc] forms of [tcp_ptrace2_passoc]/[tcp_ptrace_passoc]:
-      reassociating a tensor product and then tracing out the factor that
-      ends up first (resp. discarding the factor that ends up last) agrees
-      with tracing it out (resp. discarding it) before reassociating. *)
-  Lemma tcp_ptrace2_Uprodassoc {A B C} (X : tcp (A * B)) (g : tcp C) :
-    tcp_ptrace2 (tcp_conj Uprodassoc (tcp_tensor X g)) = tcp_tensor (tcp_ptrace2 X) g.
-  Proof. unfold Uprodassoc; apply tcp_ptrace2_passoc. Qed.
-
-  Lemma tcp_ptrace_Uprodassoc {A B C} (a : tcp A) (Y : tcp (B * C)) :
-    tcp_ptrace (tcp_conj (oadj Uprodassoc) (tcp_tensor a Y)) = tcp_tensor a (tcp_ptrace Y).
-  Proof. unfold Uprodassoc; rewrite Ubij_adj; apply tcp_ptrace_passoc. Qed.
-
-  Lemma tcp_ptrace2_Uprodassoc_r {A B C} (a : tcp A) (Y : tcp (B * C)) :
-    tcp_ptrace2 (tcp_conj (oadj Uprodassoc) (tcp_tensor a Y))
-    = tcp_scale (tcp_trace a) (tcp_ptrace2 Y).
-  Proof. unfold Uprodassoc; rewrite Ubij_adj; apply tcp_ptrace2_passoc_r. Qed.
-
   (** The identity reindexing is [oid], and composing two [Ubij]s along
       composable index maps is the [Ubij] of the composite -- both index-level
       computations once [op_ext_ket] is in hand. Every syntactic identity

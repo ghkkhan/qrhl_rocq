@@ -662,55 +662,6 @@ Module Type HILBERT_SUBSTRATE.
                (tcp_tensor r s)
       = tcp_tensor s r.
 
-  (** Partial trace commutes with reassociating a tensor product, regardless
-      of which factor ends up traced out. Given explicitly via [Ubij] rather
-      than through a named associator, for the same reason as
-      [tcp_ptrace_pswap]/[tcp_conj_pswap] -- the associator is derived
-      ([Uprodassoc] in [Theory.v]), not part of the signature. Not derivable
-      from [tcp_conj_proj] plus [tcp_decompose]: that route needs the
-      associator's action on a general, non-ket, tensor vector -- a vector in
-      [l2 (A * B)] that is not itself [tensorv a b] for any [a], [b] -- which
-      is exactly the continuity the signature does not expose. Textbook
-      nonetheless: this is literally what "reassociating a tensor product"
-      means. Needed by [QInit1]'s witness, which discards a register nested
-      inside one factor of a relational state, tracing it out only after
-      reassociating the two sides it was split into onto opposite ends of the
-      product. *)
-  Axiom tcp_ptrace2_passoc : forall A B C H1 H2 (X : tcp (A * B)) (g : tcp C),
-      tcp_ptrace2
-        (tcp_conj (@Ubij ((A * B) * C) (A * (B * C))
-                     (fun p => (fst (fst p), (snd (fst p), snd p)))
-                     (fun p => ((fst p, fst (snd p)), snd (snd p))) H1 H2)
-                  (tcp_tensor X g))
-      = tcp_tensor (tcp_ptrace2 X) g.
-
-  (** The mirror, for the trace that keeps the *newly outer* first factor
-      instead of discarding it -- [QInit1]'s witness needs this direction too,
-      to reassociate back after tensoring the fresh state in. *)
-  Axiom tcp_ptrace_passoc : forall A B C H1 H2 (a : tcp A) (Y : tcp (B * C)),
-      tcp_ptrace
-        (tcp_conj (@Ubij (A * (B * C)) ((A * B) * C)
-                     (fun p => ((fst p, fst (snd p)), snd (snd p)))
-                     (fun p => (fst (fst p), (snd (fst p), snd p))) H1 H2)
-                  (tcp_tensor a Y))
-      = tcp_tensor a (tcp_ptrace Y).
-
-  (** The third combination [QInit1]'s witness needs, distinct from both
-      above: reassociating the *other* way and then discarding the *newly
-      outer first* factor entirely (not just retracting one side of it).
-      Since that factor's own trace is all that survives a total discard,
-      the fresh scale factor is the price of not needing yet another Ubij
-      argument on the right. Same non-derivability reason as the other two:
-      the associator's action on a general, possibly entangled, tensor
-      vector is exactly the continuity gap the signature does not expose. *)
-  Axiom tcp_ptrace2_passoc_r : forall A B C H1 H2 (a : tcp A) (Y : tcp (B * C)),
-      tcp_ptrace2
-        (tcp_conj (@Ubij (A * (B * C)) ((A * B) * C)
-                     (fun p => ((fst p, fst (snd p)), snd (snd p)))
-                     (fun p => (fst (fst p), (snd (fst p), snd p))) H1 H2)
-                  (tcp_tensor a Y))
-      = tcp_scale (tcp_trace a) (tcp_ptrace2 Y).
-
   Axiom tcp_tensor_proj : forall X Y (v : l2 X) (w : l2 Y),
       tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w).
   Axiom tcp_scale_tensor_l : forall X Y (a : R) (r : tcp X) (s : tcp Y),
