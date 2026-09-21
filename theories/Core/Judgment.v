@@ -1326,31 +1326,307 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                             (cqdirac_wf m2 (tcp_proj u'))).
   Qed.
 
+  (** If a memory's block of a state satisfying [A] decomposes as a
+      (scaled, unit) family of pure products, then any component with
+      nonzero scale is itself a pure state satisfying [A] -- the membership
+      hypothesis [pure_scaled_witness] needs for each component of the
+      converse of Lemma 36's spectral decomposition. *)
+  Lemma decomposed_mem (A : pred) (rm : rcmem) (r : rcqs) (K : Type)
+        (lam : K -> R) (u u' : K -> l2 qmem) :
+    psat r A ->
+    tcp_summable (fun k => tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k)))) ->
+    r rm = tcp_sum (fun k => tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k)))) ->
+    forall k, (0 <= lam k)%R -> lam k <> 0%R -> hmem (rprod (u k) (u' k)) (ev A rm).
+  Proof.
+    intros Hsat Hsum Heq k Hnn Hne.
+    assert (Hpos : (0 < lam k)%R) by lra.
+    apply (Hsat rm).
+    rewrite Heq, (tcp_supp_sum _ _ _ Hsum).
+    eapply hSup_ub.
+    rewrite (tcp_supp_scale _ (lam k) _ Hpos), tcp_supp_proj.
+    apply hspan_ub; reflexivity.
+  Qed.
+
   (* ================================================================= *)
-  (** ** Lemma 36, converse direction -- OUTSTANDING
+  (** ** Lemma 36, converse direction
 
-      [qrhl_pure A c d B -> qrhl A c d B] is the direction one uses to
-      *establish* a judgment, and it is not proved here.
-
-      The paper's argument: decompose an arbitrary separable [rho] satisfying
-      [A] as [rho = sum_{m1 m2 i} lambda_{m1 m2 i}
+      [qrhl_pure A c d B -> qrhl A c d B]: the direction one uses to
+      *establish* a judgment. The paper's argument: decompose an arbitrary
+      separable [rho] satisfying [A] as
+      [rho = sum_{m1 m2 i} lambda_{m1 m2 i}
       proj(|m1 m2>) (x) proj(psi^(1)_{m1 m2 i} (x) psi^(2)_{m1 m2 i})], apply
       the hypothesis to each pure component to get witnesses
       [rho'_{m1 m2 i}], and set [rho' := sum lambda_{m1 m2 i} rho'_{m1 m2 i}].
 
-      Two things are missing for that. The decomposition itself is available --
-      it is the substrate's [tcp_decompose] (the spectral theorem for positive
-      trace-class operators) combined with separability. What is missing is the
-      bookkeeping on the assembled sum: showing [rho'] is summable, that its
-      trace is bounded, and that the two partial traces of a sum of witnesses
-      are the sums of their partial traces, all of which need the rearrangement
-      theorem for unordered nonnegative sums that [Semantics.v] already flags
-      for [denote_summable]. The paper does this bookkeeping explicitly --
-      equations (11) through (14) of its proof are exactly that computation.
-
-      So this is the third item waiting on the same piece of analysis, after
-      [denote_summable] and rule JointSample's marginals. It is now clearly the
-      highest-value gap in the development: it blocks the converse of Lemma 36,
-      and most rule soundness proofs go through that converse. *)
+      Every piece of that is now in place: [rsep_pure_decompose] is the
+      per-memory decomposition (via [tcp_decompose] and separability),
+      [rprod_normalize_total] normalizes each component, [pure_scaled_witness]
+      turns a normalized scaled component into a witness via [qrhl_pure], and
+      [rcqs_sum]/[rcqs_fam] (built for rule Case) reassemble the family. What
+      is genuinely new here is the joint-summability bookkeeping: the
+      assembled witness family is indexed by the *sigma type* of all
+      (memory, decomposition-component) pairs, and closing the two
+      projection equations needs an auxiliary "input" point-mass family [R0]
+      purely to invoke [rcqs_projL_sum]/[rcqs_fam_projL] on it -- see the
+      comments below for the shape of that detour. *)
+  Theorem qrhl_pure_to_qrhl (A B : pred) (c d : prog) :
+    wt c -> wt d -> qrhl_pure A c d B -> qrhl A c d B.
+  Proof.
+    intros Hwtc Hwtd Hpure r Hwf Hsep Hsat.
+    (* Per-memory pure spectral decomposition, each component normalized
+       with a nonnegative scale. *)
+    assert (Hdec : forall rm : rcmem,
+      { K : Type & { u : K -> l2 qmem & { u' : K -> l2 qmem & { lam : K -> R |
+          (forall k, inner (u k) (u k) = C1) /\
+          (forall k, inner (u' k) (u' k) = C1) /\
+          (forall k, (0 <= lam k)%R) /\
+          tcp_summable (fun k => tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k)))) /\
+          r rm = tcp_sum (fun k => tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k)))) } } } }).
+    { intros rm.
+      destruct (constructive_indefinite_description _ (rsep_pure_decompose (r rm) (Hsep rm)))
+        as [K0 HK0].
+      destruct (constructive_indefinite_description _ HK0) as [phi0 HK1].
+      destruct (constructive_indefinite_description _ HK1) as [psi0 [Hsum0 Heq0]].
+      assert (Hnorm : forall k : K0,
+        { u : l2 qmem & { u' : l2 qmem & { lam : R |
+            inner u u = C1 /\ inner u' u' = C1 /\ (0 <= lam)%R /\
+            tcp_proj (rprod (phi0 k) (psi0 k)) = tcp_scale lam (tcp_proj (rprod u u')) } } }).
+      { intros k.
+        destruct (constructive_indefinite_description _ (rprod_normalize_total (phi0 k) (psi0 k)))
+          as [u Hu1].
+        destruct (constructive_indefinite_description _ Hu1) as [u' Hu2].
+        destruct (constructive_indefinite_description _ Hu2) as [lam Hlam].
+        exists u, u', lam; exact Hlam. }
+      set (u := fun k => projT1 (Hnorm k)).
+      set (u' := fun k => projT1 (projT2 (Hnorm k))).
+      set (lam := fun k => proj1_sig (projT2 (projT2 (Hnorm k)))).
+      assert (Hprops : forall k,
+        inner (u k) (u k) = C1 /\ inner (u' k) (u' k) = C1 /\ (0 <= lam k)%R /\
+        tcp_proj (rprod (phi0 k) (psi0 k)) = tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k))))
+        by (intros k; apply (proj2_sig (projT2 (projT2 (Hnorm k))))).
+      assert (Heq2 : (fun k => tcp_scale (lam k) (tcp_proj (rprod (u k) (u' k))))
+                     = (fun k => tcp_proj (rprod (phi0 k) (psi0 k))))
+        by (apply funext; intros k; symmetry; apply (proj2 (proj2 (proj2 (Hprops k))))).
+      exists K0, u, u', lam; repeat split.
+      - intros k; apply (proj1 (Hprops k)).
+      - intros k; apply (proj1 (proj2 (Hprops k))).
+      - intros k; apply (proj1 (proj2 (proj2 (Hprops k)))).
+      - rewrite Heq2; exact Hsum0.
+      - rewrite Heq2; exact Heq0. }
+    set (Kf := fun rm => projT1 (Hdec rm)).
+    set (uf := fun rm => projT1 (projT2 (Hdec rm))).
+    set (u'f := fun rm => projT1 (projT2 (projT2 (Hdec rm)))).
+    set (lamf := fun rm => proj1_sig (projT2 (projT2 (projT2 (Hdec rm))))).
+    assert (Hpr : forall rm,
+      (forall k : Kf rm, inner (uf rm k) (uf rm k) = C1) /\
+      (forall k : Kf rm, inner (u'f rm k) (u'f rm k) = C1) /\
+      (forall k : Kf rm, (0 <= lamf rm k)%R) /\
+      tcp_summable (fun k : Kf rm => tcp_scale (lamf rm k) (tcp_proj (rprod (uf rm k) (u'f rm k)))) /\
+      r rm = tcp_sum (fun k : Kf rm => tcp_scale (lamf rm k) (tcp_proj (rprod (uf rm k) (u'f rm k)))))
+      by (intros rm; apply (proj2_sig (projT2 (projT2 (projT2 (Hdec rm)))))).
+    set (Z := sigT Kf).
+    (* Apply [qrhl_pure] to each normalized, scaled component. *)
+    assert (Hw : forall z : Z,
+      { r' : rcqs | rcqs_wf r' /\ rcqs_sep r' /\ psat r' B
+                    /\ rcqs_projL r' = denote c (cqs_scale (lamf (projT1 z) (projT2 z))
+                                         (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z)))))
+                    /\ rcqs_projR r' = denote d (cqs_scale (lamf (projT1 z) (projT2 z))
+                                         (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))) }).
+    { intros [[m1 m2] k]; cbn [projT1 projT2].
+      destruct (Hpr (m1, m2)) as [Hu1 [Hu2 [Hnn [Hsum Heqrm]]]].
+      apply constructive_indefinite_description.
+      apply (pure_scaled_witness A B c d m1 m2 (uf (m1, m2) k) (u'f (m1, m2) k) (lamf (m1, m2) k)
+               Hwtc Hwtd Hpure (Hu1 k) (Hu2 k) (Hnn k)).
+      intros Hne.
+      exact (decomposed_mem A (m1, m2) r (Kf (m1, m2)) (lamf (m1, m2)) (uf (m1, m2)) (u'f (m1, m2))
+               Hsat Hsum Heqrm k (Hnn k) Hne). }
+    set (r' := fun z : Z => proj1_sig (Hw z)).
+    assert (Hwf' : forall z, rcqs_wf (r' z)) by (intros z; apply (proj1 (proj2_sig (Hw z)))).
+    assert (Hsep' : forall z, rcqs_sep (r' z))
+      by (intros z; apply (proj1 (proj2 (proj2_sig (Hw z))))).
+    assert (Hsat' : forall z, psat (r' z) B)
+      by (intros z; apply (proj1 (proj2 (proj2 (proj2_sig (Hw z)))))).
+    assert (HL : forall z, rcqs_projL (r' z)
+                 = denote c (cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z))))))
+      by (intros z; apply (proj1 (proj2 (proj2 (proj2 (proj2_sig (Hw z))))))).
+    assert (HR : forall z, rcqs_projR (r' z)
+                 = denote d (cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))))
+      by (intros z; apply (proj2 (proj2 (proj2 (proj2 (proj2_sig (Hw z))))))).
+    (* The input point-mass family: purely a device to invoke
+       [rcqs_projL_sum]/[rcqs_fam_projL] on, to relate the assembled
+       witnesses' projections back to [r]'s. *)
+    set (R0 := fun z : Z => rdirac (projT1 z)
+                 (tcp_scale (lamf (projT1 z) (projT2 z))
+                    (tcp_proj (rprod (uf (projT1 z) (projT2 z)) (u'f (projT1 z) (projT2 z)))))).
+    assert (HR0L : forall z : Z, rcqs_projL (R0 z)
+                   = cqs_scale (lamf (projT1 z) (projT2 z))
+                       (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z))))).
+    { intros [[m1 m2] k]; cbn [projT1 projT2].
+      destruct (Hpr (m1, m2)) as [_ [Hu2 _]].
+      unfold R0; cbn [projT1 projT2].
+      rewrite rcqs_projL_rdirac, rtcpL_scale, (rtcpL_rprod (uf (m1, m2) k) (u'f (m1, m2) k) (Hu2 k)).
+      apply cqdirac_scale. }
+    assert (HR0R : forall z : Z, rcqs_projR (R0 z)
+                   = cqs_scale (lamf (projT1 z) (projT2 z))
+                       (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))).
+    { intros [[m1 m2] k]; cbn [projT1 projT2].
+      destruct (Hpr (m1, m2)) as [Hu1 [_ _]].
+      unfold R0; cbn [projT1 projT2].
+      rewrite rcqs_projR_rdirac, rtcpR_scale, (rtcpR_rprod (uf (m1, m2) k) (u'f (m1, m2) k) (Hu1 k)).
+      apply cqdirac_scale. }
+    (* [R0] sums back to [r]: at each memory, the outer sigma-sum collapses
+       to the one memory that contributed, whose inner sum is exactly the
+       decomposition [Hpr] supplies. *)
+    assert (Hcollapse : rcqs_sum R0 = r).
+    { apply funext; intros rm0.
+      set (G := fun (rm : rcmem) (k : Kf rm) => R0 (existT Kf rm k) rm0).
+      assert (Hval : forall rm, tcp_sum (fun k : Kf rm => G rm k)
+                     = if excluded_middle_informative (rm = rm0) then r rm0 else tcp_zero).
+      { intros rm; destruct (excluded_middle_informative (rm = rm0)) as [-> | Hne].
+        - assert (Heq3 : (fun k : Kf rm0 => G rm0 k)
+                         = (fun k : Kf rm0 => tcp_scale (lamf rm0 k)
+                                                 (tcp_proj (rprod (uf rm0 k) (u'f rm0 k)))))
+            by (apply funext; intros k; unfold G, R0; cbn [projT1 projT2]; apply rdirac_same).
+          destruct (Hpr rm0) as [_ [_ [_ [_ Heqrm0]]]]; rewrite Heq3, <- Heqrm0; reflexivity.
+        - assert (Heq3 : (fun k : Kf rm => G rm k) = (fun k : Kf rm => tcp_zero)).
+          { apply funext; intros k; unfold G, R0; cbn [projT1 projT2]; apply rdirac_other.
+            intros Heq'; apply Hne; symmetry; exact Heq'. }
+          rewrite Heq3; apply tcp_sum_zero; intros _; reflexivity. }
+      assert (H1 : forall rm, tcp_summable (fun k : Kf rm => G rm k)).
+      { intros rm; destruct (excluded_middle_informative (rm = rm0)) as [-> | Hne].
+        - assert (Heq3 : (fun k : Kf rm0 => G rm0 k)
+                         = (fun k : Kf rm0 => tcp_scale (lamf rm0 k)
+                                                 (tcp_proj (rprod (uf rm0 k) (u'f rm0 k)))))
+            by (apply funext; intros k; unfold G, R0; cbn [projT1 projT2]; apply rdirac_same).
+          destruct (Hpr rm0) as [_ [_ [_ [Hsum0 _]]]]; rewrite Heq3; exact Hsum0.
+        - assert (Heq3 : (fun k : Kf rm => G rm k) = (fun k : Kf rm => tcp_zero)).
+          { apply funext; intros k; unfold G, R0; cbn [projT1 projT2]; apply rdirac_other.
+            intros Heq'; apply Hne; symmetry; exact Heq'. }
+          rewrite Heq3; apply tcp_summable_zero. }
+      assert (H2 : tcp_summable (fun rm => tcp_sum (fun k : Kf rm => G rm k))).
+      { assert (Heq4 : (fun rm => tcp_sum (fun k : Kf rm => G rm k))
+                       = (fun rm => if excluded_middle_informative (rm = rm0) then r rm0 else tcp_zero))
+          by (apply funext; exact Hval).
+        rewrite Heq4; apply (tcp_summable_singleton _ rm0).
+        intros rm Hne; destruct (excluded_middle_informative (rm = rm0)); [ contradiction | reflexivity ]. }
+      destruct (tcp_sum_sigma rqmem rcmem Kf G H1 H2) as [_ Heqsig2].
+      unfold rcqs_sum.
+      transitivity (tcp_sum (fun p : sigT Kf => G (projT1 p) (projT2 p))).
+      { f_equal; apply funext; intros [rm k]; reflexivity. }
+      transitivity (tcp_sum (fun rm => tcp_sum (fun k : Kf rm => G rm k))).
+      { symmetry; apply Heqsig2. }
+      assert (Hcond : forall rm, rm <> rm0 ->
+        (if excluded_middle_informative (rm = rm0) then r rm0 else tcp_zero) = tcp_zero).
+      { intros rm Hne; destruct (excluded_middle_informative (rm = rm0)); [ contradiction | reflexivity ]. }
+      assert (Heq6 : (fun rm => tcp_sum (fun k : Kf rm => G rm k))
+                     = (fun rm => if excluded_middle_informative (rm = rm0) then r rm0 else tcp_zero))
+        by (apply funext; exact Hval).
+      rewrite Heq6, (tcp_sum_singleton _ rm0 Hcond).
+      destruct (excluded_middle_informative (rm0 = rm0)); [ reflexivity | contradiction ]. }
+    (* Joint summability of the scale family over the sigma index, via the
+       same [tcp_sum_sigma] flatten applied to the tcp-valued family (whose
+       outer sum is [r] itself, by [Hpr]). *)
+    assert (Hsum_per_rm : forall rm : rcmem,
+      tcp_summable (fun k : Kf rm => tcp_scale (lamf rm k) (tcp_proj (rprod (uf rm k) (u'f rm k))))).
+    { intros rm; destruct (Hpr rm) as [_ [_ [_ [Hsum _]]]]; exact Hsum. }
+    assert (Houter_tcp : tcp_summable
+      (fun rm : rcmem => tcp_sum (fun k : Kf rm => tcp_scale (lamf rm k)
+                                    (tcp_proj (rprod (uf rm k) (u'f rm k)))))).
+    { assert (Heq4 : (fun rm : rcmem => tcp_sum (fun k : Kf rm => tcp_scale (lamf rm k)
+                                          (tcp_proj (rprod (uf rm k) (u'f rm k)))))
+                     = r).
+      { apply funext; intros rm; destruct (Hpr rm) as [_ [_ [_ [_ Heqrm]]]]; symmetry; exact Heqrm. }
+      rewrite Heq4; exact Hwf. }
+    destruct (tcp_sum_sigma rqmem rcmem Kf
+                (fun rm k => tcp_scale (lamf rm k) (tcp_proj (rprod (uf rm k) (u'f rm k))))
+                Hsum_per_rm Houter_tcp) as [HsigTcp _].
+    assert (Hlamjoint : summable (fun z : Z => lamf (projT1 z) (projT2 z))).
+    { assert (Htr : summable (fun z : Z => tcp_trace
+            (tcp_scale (lamf (projT1 z) (projT2 z))
+               (tcp_proj (rprod (uf (projT1 z) (projT2 z)) (u'f (projT1 z) (projT2 z)))))))
+        by (apply tcp_summable_trace; exact HsigTcp).
+      assert (Heq5 : (fun z : Z => tcp_trace
+            (tcp_scale (lamf (projT1 z) (projT2 z))
+               (tcp_proj (rprod (uf (projT1 z) (projT2 z)) (u'f (projT1 z) (projT2 z))))))
+          = (fun z : Z => lamf (projT1 z) (projT2 z))).
+      { apply funext; intros [rm k]; cbn [projT1 projT2].
+        destruct (Hpr rm) as [Hu1 [Hu2 _]].
+        apply (tcp_trace_scale_proj_rprod_unit (lamf rm k) (uf rm k) (u'f rm k) (Hu1 k) (Hu2 k)). }
+      rewrite <- Heq5; exact Htr. }
+    (* The assembled witnesses' joint summability, bounded by [lamf] the
+       same way rule Case bounds its witnesses by the input family's trace. *)
+    assert (Hbound : forall z : Z, (rcqs_trace (r' z) <= lamf (projT1 z) (projT2 z))%R).
+    { intros [[m1 m2] k]; cbn [projT1 projT2].
+      destruct (Hpr (m1, m2)) as [Hu1 [Hu2 [Hnn _]]].
+      rewrite <- (rcqs_trace_projL (r' (existT Kf (m1, m2) k)) (Hwf' (existT Kf (m1, m2) k))),
+              (HL (existT Kf (m1, m2) k)); cbn [projT1 projT2].
+      eapply Rle_trans.
+      - apply (denote_trace_le c Hwtc _
+                 (cqs_scale_wf (lamf (m1, m2) k) (cqdirac m1 (tcp_proj (uf (m1, m2) k)))
+                    (Hnn k) (cqdirac_wf m1 _))).
+      - rewrite (cqs_trace_scale (lamf (m1, m2) k) (cqdirac m1 (tcp_proj (uf (m1, m2) k)))
+                   (Hnn k) (cqdirac_wf m1 _)).
+        rewrite (cqdirac_trace m1 (tcp_proj (uf (m1, m2) k))), tcp_trace_proj, (Hu1 k).
+        apply Req_le; replace (Cre C1) with 1%R by reflexivity; ring. }
+    assert (Hfam' : rcqs_fam r').
+    { unfold rcqs_fam.
+      refine (proj1 (tsum_pairs_le_iter (fun (z : Z) (rm : rcmem) => tcp_trace (r' z rm)) _ _)).
+      - intros z; apply tcp_summable_trace, (Hwf' z).
+      - apply (summable_mono _ (fun z => lamf (projT1 z) (projT2 z)));
+          [ exact Hlamjoint | apply Hbound ]. }
+    (* [R0]'s own joint summability, exactly (not just boundedly) by [lamf]. *)
+    assert (HR0trace : forall z : Z, rcqs_trace (R0 z) = lamf (projT1 z) (projT2 z)).
+    { intros [rm k]; cbn [projT1 projT2]; unfold R0; cbn [projT1 projT2].
+      rewrite rdirac_trace.
+      destruct (Hpr rm) as [Hu1 [Hu2 _]].
+      apply (tcp_trace_scale_proj_rprod_unit (lamf rm k) (uf rm k) (u'f rm k) (Hu1 k) (Hu2 k)). }
+    assert (HfamR0 : rcqs_fam R0).
+    { unfold rcqs_fam.
+      refine (proj1 (tsum_pairs_le_iter (fun (z : Z) (rm : rcmem) => tcp_trace (R0 z rm)) _ _)).
+      - intros z; apply tcp_summable_trace, rdirac_wf.
+      - apply (summable_mono _ (fun z => lamf (projT1 z) (projT2 z))).
+        + exact Hlamjoint.
+        + intros z; rewrite <- (HR0trace z); unfold rcqs_trace; apply Rle_refl. }
+    assert (HfamX : cqs_fam (fun z : Z => cqs_scale (lamf (projT1 z) (projT2 z))
+                                (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z)))))).
+    { assert (Heq7 : (fun z => rcqs_projL (R0 z))
+                     = (fun z => cqs_scale (lamf (projT1 z) (projT2 z))
+                                   (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z))))))
+        by (apply funext; exact HR0L).
+      rewrite <- Heq7; apply (rcqs_fam_projL R0 HfamR0). }
+    assert (HfamY : cqs_fam (fun z : Z => cqs_scale (lamf (projT1 z) (projT2 z))
+                                (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z)))))).
+    { assert (Heq7 : (fun z => rcqs_projR (R0 z))
+                     = (fun z => cqs_scale (lamf (projT1 z) (projT2 z))
+                                   (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))))
+        by (apply funext; exact HR0R).
+      rewrite <- Heq7; apply (rcqs_fam_projR R0 HfamR0). }
+    exists (rcqs_sum r'); repeat split.
+    - apply rcqs_sum_wf; exact Hfam'.
+    - apply rcqs_sum_sep; assumption.
+    - apply rcqs_sum_psat; assumption.
+    - rewrite (rcqs_projL_sum r' Hfam').
+      transitivity (cqs_sum (fun z : Z => denote c (cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z))))))).
+      { f_equal; apply funext; exact HL. }
+      transitivity (denote c (cqs_sum (fun z : Z => cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (fst (projT1 z)) (tcp_proj (uf (projT1 z) (projT2 z))))))).
+      { symmetry; apply (denote_sum c Hwtc Z _ HfamX). }
+      transitivity (denote c (cqs_sum (fun z : Z => rcqs_projL (R0 z)))).
+      { f_equal; f_equal; apply funext; intros z; symmetry; apply HR0L. }
+      rewrite <- (rcqs_projL_sum R0 HfamR0), Hcollapse; reflexivity.
+    - rewrite (rcqs_projR_sum r' Hfam').
+      transitivity (cqs_sum (fun z : Z => denote d (cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))))).
+      { f_equal; apply funext; exact HR. }
+      transitivity (denote d (cqs_sum (fun z : Z => cqs_scale (lamf (projT1 z) (projT2 z))
+                               (cqdirac (snd (projT1 z)) (tcp_proj (u'f (projT1 z) (projT2 z))))))).
+      { symmetry; apply (denote_sum d Hwtd Z _ HfamY). }
+      transitivity (denote d (cqs_sum (fun z : Z => rcqs_projR (R0 z)))).
+      { f_equal; f_equal; apply funext; intros z; symmetry; apply HR0R. }
+      rewrite <- (rcqs_projR_sum R0 HfamR0), Hcollapse; reflexivity.
+  Qed.
 
 End JudgmentTheory.
