@@ -80,9 +80,9 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
-| 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
+| 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` `JointSample` | **done** |
 | 2 | `QrhlElim` (Lemma 50) and its equality form, `JointWhile` (Lemma 61) | **done** (ahead of their phase) |
-| 1d | the other 3 vertical-slice rules | in progress, see below |
+| 1d | the other 2 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElimEq`, `While1` | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
@@ -206,12 +206,32 @@ guessed):
 | ~~`Sample1`~~ | **done** |
 | ~~`Measure1`~~ | **done** — four textbook axioms: a projector fixes its image, `Meas(D,X)⊗id ⊆ Meas(D,X⊗Y)` (bounded and total forms), and that a total measurement on one factor leaves the other factor's reduced state alone |
 | ~~`Case`~~ | **done** — needed `denote_sum` |
+| ~~`JointSample`~~ | **done** — needed no new axioms |
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
-| `JointSample` | a two-sided reindexing: the witness updates `x₁` and `y₂` together along a coupling, so `rbeta` has to be replaced by its joint analogue |
-| `JointMeasureSimple` | the same, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
+| `JointMeasureSimple` | the same pattern as `Measure1`/`JointSample` combined, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
 
 The converse of Lemma 36 is the natural next one: `denote_sum` and the
 `rcqs_fam` machinery `Case` needed are exactly what it was waiting on.
+
+`JointSample` (Lemma 57) is proved, needing no new axioms. Unlike `Sample1`
+— where only the un-sampled side's projection needs a probability identity —
+here *both* `x` and `y` are sampled, so both projections need one: the
+witness's weight `jwt` evaluates the coupling `f` at the guessed source memory
+and applies the result to the target's own values of `x` and `y`, mirroring
+`Sample1`'s `swt` but jointly. Each projection then needs a two-layer
+argument: for each *kept* value (`a` on the left, `b` on the right), the other
+variable and the other side's classical memory collapse together via `sbeta`
+and the marginal identity (`Sample1_projR`'s totality-collapse argument, with
+a marginal in place of a total sum), and then the kept values are brought to
+the front by a Fubini regrouping (`Sample1_projL`'s pattern, one layer up).
+`Substrate/Sums.v` gains the marginals themselves (`marginal1`/`marginal2`,
+`dmarginal1`/`dmarginal2`), built from `tsum_iter_le_pairs`/`tsum_tonelli` —
+the piece of Fubini this file's header had flagged as `JointSample`'s
+motivating gap since Phase 0. `Core/Vars.v` gains the right-sided and
+cross-side mirrors of the `rcupd`/`csel` update lemmas, and `Core/Judgment.v`
+gains `rbeta2`, the two-sided reindexing (updating a variable on *each* side
+at once), needing no distinctness side condition since `(SL,x)` and `(SR,y)`
+are always different relational variables.
 
 `JointWhile` (Lemma 61) is proved, also ahead of its phase, because the loop
 clause of the three inductions made it reachable. It needs no termination

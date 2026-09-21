@@ -254,4 +254,38 @@ Module VarTheory (V : PROGRAM_VARS).
     rewrite cupd_id; reflexivity.
   Qed.
 
+  (** The mirror images on the right side, and the fact that an update on one
+      side commutes with an update on the other -- needed by rule JointSample,
+      which updates a variable on each side at once. Unlike the paper's
+      statement this needs no distinctness side condition: [(SL, x)] and
+      [(SR, y)] are always different relational variables, by side alone. *)
+
+  Lemma csel_rcupd_R (rm : rcmem) (y : cvar) (b : ctype y) :
+    csel SR (rcupd rm (SR, y) b) = cupd (csel SR rm) y b.
+  Proof. destruct rm; reflexivity. Qed.
+
+  Lemma csel_rcupd_R_other (rm : rcmem) (y : cvar) (b : ctype y) :
+    csel SL (rcupd rm (SR, y) b) = csel SL rm.
+  Proof. destruct rm; reflexivity. Qed.
+
+  Lemma rcupd_rcupd_R (rm : rcmem) (y : cvar) (a b : ctype y) :
+    rcupd (rcupd rm (SR, y) a) (SR, y) b = rcupd rm (SR, y) b.
+  Proof.
+    destruct rm as [u v]; cbn [rcupd fst snd].
+    rewrite cupd_cupd; reflexivity.
+  Qed.
+
+  Lemma rcupd_id_R (rm : rcmem) (y : cvar) :
+    rcupd rm (SR, y) (csel SR rm y) = rm.
+  Proof.
+    destruct rm as [u v]; cbn [rcupd csel fst snd].
+    rewrite cupd_id; reflexivity.
+  Qed.
+
+  Lemma rcupd_comm_LR (rm : rcmem) (x : cvar) (a : ctype x) (y : cvar)
+        (b : ctype y) :
+    rcupd (rcupd rm (SL, x) a) (SR, y) b
+    = rcupd (rcupd rm (SR, y) b) (SL, x) a.
+  Proof. destruct rm; reflexivity. Qed.
+
 End VarTheory.

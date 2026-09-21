@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `8563c58`. Thirteen of the paper's rules are proved,
+Last updated at commit (pending). Sixteen of the paper's rules are proved,
 with no admits and no axioms outside the substrate signature.
 
 ---
@@ -236,6 +236,7 @@ from:
 | `JointIf` | 59 | |
 | `JointWhile` | 61 | ahead of its phase; no termination condition needed |
 | `Measure1` | 62 | |
+| `JointSample` | 57 | both projections need a marginal collapse, not just one -- see §7b |
 | `QApply1` | 65 | |
 
 `grep -rhoE "Theorem rule_[A-Za-z_0-9]+" theories/Rules/ | sort -u` is the
@@ -275,9 +276,9 @@ discharges that risk.
 
 ## 7. What to do next, in order
 
-Everything in Phase 1d is done except `JointSample`, `QInit1` and
-`JointMeasureSimple`. The ordering below reflects what is actually blocked by
-what, not the phase numbering.
+Everything in Phase 1d is done except `QInit1` and `JointMeasureSimple`. The
+ordering below reflects what is actually blocked by what, not the phase
+numbering.
 
 ### 7a. Lemma 36's converse — the biggest unblocked item
 
@@ -308,14 +309,30 @@ The shape:
 Budget honestly: this is the largest single remaining piece in Phase 1. The
 sigma-index bookkeeping, not the mathematics, is the work.
 
-### 7b. `JointSample` (Lem 57)
+### 7b. `JointSample` (Lem 57) — DONE
 
-`Sample1`'s pattern with a coupling `f : rexpr (distr (ctype x * ctype y))`.
-The witness updates `x₁` and `y₂` together, so `rbeta` has to be replaced by
-its two-sided analogue, and the two projections each need one marginal of `f`
-(which is where the precondition's `marginalᵢ f = idxᵢ eᵢ` is used). Tonelli
-over the pair does the marginal. No architectural obstacle; about the size of
-`Sample1`.
+Proved. No new axioms. It is *not* "about the size of `Sample1`" — an earlier
+note here said that, and it was too optimistic. The witness is `Sample1`'s
+pattern with a two-sided reindexing `rbeta2` (Judgment.v) in place of `rbeta`,
+and `Substrate/Sums.v` gained the marginals (`marginal1`/`marginal2`,
+`dmarginal1`/`dmarginal2`) via `tsum_iter_le_pairs`/`tsum_tonelli`, exactly as
+expected. What made it larger: unlike `Sample1` (where only the *unsampled*
+side's projection needs a probability identity, and the *other* projection is
+free combinatorics), here **both** sides are sampled, so **both** projections
+need a marginal-collapse argument, not just one. Each projection is therefore
+a *two-layer* proof: an inner layer collapses the other variable and the other
+side's classical memory together via `sbeta` and the marginal identity
+(`Sample1_projR`'s totality-collapse pattern, with a marginal value playing
+the role totality played), and an outer layer brings the kept variable to the
+front via a `cmem * (X * Y) ≅ Y * (cmem * X)`-style Fubini regrouping
+(`Sample1_projL`'s pattern, one level up, needing three separate
+`tcp_sum_pair`/`tcp_sum_bij` calls chained together rather than one
+`tcp_sum_swap`). See `Rules/Classical.v`'s `sampleLR_projL_inner` /
+`sampleLR_projR_inner` for the inner layer and `sampleLR_projL` /
+`sampleLR_projR` for the outer one — the second is a near-exact mirror of the
+first (swap `SL↔SR`, `x↔y`, `e1↔e2`, `rtcpL↔rtcpR`, `marginal1↔marginal2`) and
+compiled on the first try once the first one worked, which is worth knowing if
+this pattern recurs (it will, for `JointMeasureSimple`).
 
 ### 7c. `op_ext_ket` — one axiom that unblocks several things at once
 
@@ -414,7 +431,13 @@ involution lemmas are in `Core/Vars.v`. What is missing is three things.
 measurements to be total (the paper says so explicitly, p. 32), so
 `tcp_ptrace2_meas_tensor` is not what makes its projections work — the two
 sides' measurements cancel against each other through the quantum equality
-instead.
+instead. Expect the same two-layer projection structure `JointSample` needed
+(§7b): both projections need a collapse argument here too, since both sides
+measure. `rbeta2` should not be reusable as-is (the summed index is now a
+*measurement outcome* shared by both sides via the quantum equality, not a
+pair of independently-updated classical variables), but the Fubini-regrouping
+technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
+`Y * (cmem * X)`) should port directly.
 
 ### 7g. §4.4's two remaining lemmas
 
@@ -470,6 +493,15 @@ Recorded so they are not re-derived.
   explicit `transitivity` to the intended term and close it with `apply`,
   which unifies up to conversion. Reach for that immediately rather than
   fighting the `rewrite`.
+- **`JointSample` was not "about the size of `Sample1`"** — an earlier note
+  in this file said that, extrapolating from the "no architectural obstacle,
+  just a two-sided reindexing" observation. That part was right, but it missed
+  that *both* projections would need a probability-collapse argument (`Sample1`
+  only needed one, on the un-sampled side), doubling the projection proofs and
+  adding an extra Fubini-regrouping layer neither of `Sample1`'s two
+  projections needed on its own. Lesson: "no architectural obstacle" is not
+  the same estimate as "same size" — count how many projections need a
+  collapse, not just whether one does.
 - **The other partial trace is not derivable from a tensor swap.** Going
   `tcp_ptrace ∘ tcp_conj Uswap` would need the swap's action on a general,
   non-product, non-pure operator, which the signature cannot compute. Hence
@@ -489,6 +521,7 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
+| (pending) | `JointSample` (Lem 57); `Core/Vars.v` right/cross-side `rcupd` mirrors; `Core/Judgment.v` `rbeta2`; `Substrate/Sums.v` marginals |
 | `8563c58` | `JointWhile` (Lem 61) |
 | `f343d18` | the three `denote` inductions now cover loops; `loopfree` retired |
 | `3c22b94` | docs refresh; the register-coherence write-up |

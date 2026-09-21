@@ -205,6 +205,78 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ================================================================= *)
+  (** ** The two-sided reindexing
+
+      The relational counterpart of [rbeta], for rules that update a variable
+      on *each* side at once -- JointSample, JointMeasureSimple. [(SL, x)] and
+      [(SR, y)] are always distinct relational variables (different sides), so
+      unlike the paper's statement this needs no side condition relating [x]
+      and [y]; the two updates simply commute ([rcupd_comm_LR]). *)
+
+  Definition rbeta2 (x y : cvar) (p : rcmem * (ctype x * ctype y))
+    : rcmem * (ctype x * ctype y) :=
+    (rcupd (rcupd (fst p) (SL, x) (fst (snd p))) (SR, y) (snd (snd p)),
+     (csel SL (fst p) x, csel SR (fst p) y)).
+
+  Lemma rbeta2_invol (x y : cvar) (p : rcmem * (ctype x * ctype y)) :
+    rbeta2 x y (rbeta2 x y p) = p.
+  Proof.
+    destruct p as [rm [a b]]; unfold rbeta2; cbn [fst snd].
+    rewrite csel_rcupd_R_other, csel_rcupd_L, cupd_same,
+            csel_rcupd_R, cupd_same.
+    rewrite (rcupd_comm_LR rm x a y b), rcupd_rcupd_L.
+    rewrite <- (csel_rcupd_R_other rm y b).
+    rewrite rcupd_id_L, rcupd_rcupd_R, rcupd_id_R.
+    reflexivity.
+  Qed.
+
+  Lemma rbeta2_inj (x y : cvar) (p q : rcmem * (ctype x * ctype y)) :
+    rbeta2 x y p = rbeta2 x y q -> p = q.
+  Proof.
+    intros H; rewrite <- (rbeta2_invol x y p), <- (rbeta2_invol x y q), H;
+      reflexivity.
+  Qed.
+
+  Lemma rcupd2_inj (x y : cvar) (rm : rcmem) (p q : ctype x * ctype y) :
+    rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)
+    = rcupd (rcupd rm (SL, x) (fst q)) (SR, y) (snd q) -> p = q.
+  Proof.
+    intros H.
+    assert (Ha : fst p = fst q).
+    { assert (Hc : csel SL (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)) x
+                   = csel SL (rcupd (rcupd rm (SL, x) (fst q)) (SR, y) (snd q)) x)
+        by (rewrite H; reflexivity).
+      rewrite !csel_rcupd_R_other, !csel_rcupd_L, !cupd_same in Hc; exact Hc. }
+    assert (Hb : snd p = snd q).
+    { assert (Hc : csel SR (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)) y
+                   = csel SR (rcupd (rcupd rm (SL, x) (fst q)) (SR, y) (snd q)) y)
+        by (rewrite H; reflexivity).
+      rewrite !csel_rcupd_R, !cupd_same in Hc; exact Hc. }
+    destruct p, q; cbn in Ha, Hb; subst; reflexivity.
+  Qed.
+
+  (** The two "undo one step" corollaries of [rbeta2_invol] that
+      [JointSample] needs directly: the first component recovers [rm] no
+      matter which order the two updates are applied in (they commute), and
+      the second component recovers the pair. *)
+  Lemma rcupd2_id (x y : cvar) (rm : rcmem) (p : ctype x * ctype y) :
+    rcupd (rcupd (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))
+                  (SR, y) (csel SR rm y)) (SL, x) (csel SL rm x)
+    = rm.
+  Proof.
+    rewrite <- (rcupd_comm_LR (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))
+                  x (csel SL rm x) y (csel SR rm y)).
+    exact (f_equal fst (rbeta2_invol x y (rm, p))).
+  Qed.
+
+  Lemma csel2_id (x y : cvar) (rm : rcmem) (p : ctype x * ctype y) :
+    (csel SL (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)) x,
+     csel SR (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)) y) = p.
+  Proof.
+    exact (f_equal snd (rbeta2_invol x y (rm, p))).
+  Qed.
+
+  (* ================================================================= *)
   (** ** Adding and restricting relational states
 
       The operations a rule needs when it splits its input by a classical

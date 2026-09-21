@@ -823,6 +823,689 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
 
   End Sample1.
 
+
+  (* ================================================================= *)
+  (** ** JointSample  [Figure 2, Lemma 57, p. 63]
+
+<<
+         f : Type^exp_f subseteq D_{<=1}(Type_x x Type_y)
+         A := Cla[marginal_1(f) = idx_1 e_1 /\ marginal_2(f) = idx_2 e_2]
+              cap Inter_{(z1,z2) in supp f} B{z1/x_1, z2/y_2}
+        -----------------------------------------------------------------
+         {A} x <- e_1 ~ y <- e_2 {B}
+>>
+
+      "We need to provide a joint distribution [f] as a witness, such that
+      [e1], [e2] are the marginals of [f], and [B] holds for any [(x1, y2)]
+      chosen according to [f]." Unlike [Sample1] -- where the projection that
+      is *not* the sampled side needs totality to collapse -- here *both*
+      sides are sampled, so both projections need a marginal identity, not
+      just one.
+
+      The witness's weight [jwt] mirrors [swt]'s exact shape but for the
+      *joint* distribution: it evaluates [f] at the source memory (the one
+      [r]'s argument names, with [x, y] guessed to have been [p]) and applies
+      the resulting subdistribution to the target's *own* values of [x] and
+      [y] -- the two-sided analogue of "the probability that a source
+      distribution assigns to the observed outcome". *)
+
+  Section JointSample.
+    Context (x : cvar) (e1 : expr (distr (ctype x)))
+            (y : cvar) (e2 : expr (distr (ctype y)))
+            (f : rexpr (distr (ctype x * ctype y))).
+
+    Definition jwt (rm : rcmem) (p : ctype x * ctype y) : R :=
+      ev f (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))
+         (csel SL rm x, csel SR rm y).
+
+    Definition sampleLR (r : rcqs) : rcqs :=
+      fun rm => tcp_sum (fun p : ctype x * ctype y =>
+                   tcp_scale (jwt rm p)
+                     (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)))).
+
+    Lemma jwt_nonneg (rm : rcmem) (p : ctype x * ctype y) : (0 <= jwt rm p)%R.
+    Proof. apply dfun_nonneg. Qed.
+
+    Lemma jwt_le1 (rm : rcmem) (p : ctype x * ctype y) : (jwt rm p <= 1)%R.
+    Proof. apply dfun_le1_pt. Qed.
+
+    Lemma sampleLR_inner_wf (r : rcqs) (rm : rcmem) :
+      rcqs_wf r ->
+      tcp_summable (fun p : ctype x * ctype y =>
+                      tcp_scale (jwt rm p)
+                        (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)))).
+    Proof.
+      intros Hr; apply tcp_summable_trace.
+      apply (summable_mono _ (fun p : ctype x * ctype y =>
+                tcp_trace (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))))).
+      - apply (summable_inj
+                 (fun p : ctype x * ctype y =>
+                    rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))
+                 (fun rm' => tcp_trace (r rm')));
+          [ apply (rcupd2_inj x y rm) | apply tcp_summable_trace; exact Hr ].
+      - intros p; rewrite tcp_trace_scale.
+        rewrite <- (Rmult_1_l
+          (tcp_trace (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))))) at 2.
+        apply Rmult_le_compat_r; [ apply tcp_trace_nonneg | apply jwt_le1 ].
+    Qed.
+
+    Lemma sampleLR_trace (r : rcqs) (rm : rcmem) :
+      rcqs_wf r ->
+      tcp_trace (sampleLR r rm)
+      = tsum (fun p : ctype x * ctype y =>
+                (jwt rm p
+                 * tcp_trace
+                     (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))))%R).
+    Proof.
+      intros Hr; unfold sampleLR.
+      rewrite (tcp_trace_sum _ _ _ (sampleLR_inner_wf r rm Hr)).
+      f_equal; apply funext; intros p; apply tcp_trace_scale.
+    Qed.
+
+    (** Under [rbeta2], the weight becomes [f] evaluated at the (unchanged)
+        source memory and applied to the reindexed value -- the two-sided
+        analogue of [ssrc]. *)
+    Definition jsrc (r : rcqs) (rm' : rcmem) (z : ctype x * ctype y) : R :=
+      (tcp_trace (r rm') * ev f rm' z)%R.
+
+    Lemma sampleLR_reindex (r : rcqs) :
+      (fun q : rcmem * (ctype x * ctype y) =>
+         (jwt (fst q) (snd q)
+          * tcp_trace
+              (r (rcupd (rcupd (fst q) (SL, x) (fst (snd q)))
+                        (SR, y) (snd (snd q)))))%R)
+      = (fun q : rcmem * (ctype x * ctype y) =>
+           jsrc r (fst (rbeta2 x y q)) (snd (rbeta2 x y q))).
+    Proof.
+      apply funext; intros [rm p]; unfold jsrc, jwt, rbeta2; cbn [fst snd]; ring.
+    Qed.
+
+    Lemma jsrc_summable (r : rcqs) (rm' : rcmem) : summable (jsrc r rm').
+    Proof.
+      apply summable_scale;
+        [ apply tcp_trace_nonneg | apply dfun_nonneg | apply dfun_summable ].
+    Qed.
+
+    Lemma jsrc_le (r : rcqs) (rm' : rcmem) :
+      (tsum (jsrc r rm') <= tcp_trace (r rm'))%R.
+    Proof.
+      unfold jsrc.
+      rewrite (tsum_scale (tcp_trace (r rm')) (ev f rm')
+                 (tcp_trace_nonneg _ _) (dfun_nonneg _) (dfun_summable _)).
+      rewrite <- (Rmult_1_r (tcp_trace (r rm'))) at 2.
+      apply Rmult_le_compat_l; [ apply tcp_trace_nonneg | apply dfun_le1 ].
+    Qed.
+
+    Lemma sampleLR_wf (r : rcqs) : rcqs_wf r -> rcqs_wf (sampleLR r).
+    Proof.
+      intros Hr.
+      pose (Ga := fun (rm : rcmem) (p : ctype x * ctype y) =>
+                    (jwt rm p
+                     * tcp_trace
+                         (r (rcupd (rcupd rm (SL, x) (fst p))
+                                   (SR, y) (snd p))))%R).
+      assert (HsrcIt : summable (fun rm' => tsum (jsrc r rm'))).
+      { apply (summable_mono _ (fun rm' => tcp_trace (r rm')));
+          [ apply tcp_summable_trace; exact Hr | apply jsrc_le ]. }
+      destruct (tsum_pairs_le_iter (jsrc r) (jsrc_summable r) HsrcIt)
+        as [HsrcPS _].
+      assert (HGS : summable
+                      (fun q : rcmem * (ctype x * ctype y) => Ga (fst q) (snd q))).
+      { unfold Ga; rewrite sampleLR_reindex.
+        apply (summable_inj (rbeta2 x y)
+                 (fun q : rcmem * (ctype x * ctype y) => jsrc r (fst q) (snd q)));
+          [ apply (rbeta2_inj x y) | exact HsrcPS ]. }
+      assert (HGpos : nonneg
+                        (fun q : rcmem * (ctype x * ctype y) => Ga (fst q) (snd q))).
+      { intros q; unfold Ga; apply Rmult_le_pos;
+          [ apply jwt_nonneg | apply tcp_trace_nonneg ]. }
+      destruct (tsum_iter_le_pairs Ga HGpos HGS) as [HGit _].
+      apply tcp_summable_trace.
+      assert (Heq : (fun rm => tcp_trace (sampleLR r rm)) = (fun rm => tsum (Ga rm)))
+        by (apply funext; intros rm; apply sampleLR_trace; exact Hr).
+      rewrite Heq; exact HGit.
+    Qed.
+
+    Lemma sampleLR_sep (r : rcqs) :
+      rcqs_wf r -> rcqs_sep r -> rcqs_sep (sampleLR r).
+    Proof.
+      intros Hwf Hsep rm; unfold rsep, sampleLR.
+      rewrite (tcp_conj_sum _ _ _ Urqpair _ (sampleLR_inner_wf r rm Hwf)).
+      set (G := fun p : ctype x * ctype y =>
+                  tcp_conj Urqpair
+                    (tcp_scale (jwt rm p)
+                       (r (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))))).
+      assert (HGsep : forall p, tcp_sep (G p)).
+      { intros p; unfold G; rewrite tcp_conj_scale.
+        apply tcp_sep_scale,
+          (Hsep (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))). }
+      assert (Hdec : forall p : ctype x * ctype y,
+                { J : Type & { fg : (J -> tcp qmem) * (J -> tcp qmem) |
+                    tcp_summable (fun j => tcp_tensor (fst fg j) (snd fg j))
+                    /\ G p
+                       = tcp_sum (fun j => tcp_tensor (fst fg j) (snd fg j)) } }).
+      { intros p.
+        destruct (constructive_indefinite_description _ (HGsep p)) as [J HJ].
+        destruct (constructive_indefinite_description _ HJ) as [f' Hf'].
+        destruct (constructive_indefinite_description _ Hf') as [g Hg].
+        exists J, (f', g); exact Hg. }
+      exists (sigT (fun p : ctype x * ctype y => projT1 (Hdec p))),
+             (fun q => fst (proj1_sig (projT2 (Hdec (projT1 q)))) (projT2 q)),
+             (fun q => snd (proj1_sig (projT2 (Hdec (projT1 q)))) (projT2 q)).
+      set (F := fun (p : ctype x * ctype y) (j : projT1 (Hdec p)) =>
+                  tcp_tensor (fst (proj1_sig (projT2 (Hdec p))) j)
+                             (snd (proj1_sig (projT2 (Hdec p))) j)).
+      assert (HFa : forall p, tcp_summable (F p))
+        by (intros p; apply (proj1 (proj2_sig (projT2 (Hdec p))))).
+      assert (HFs : forall p, G p = tcp_sum (F p))
+        by (intros p; apply (proj2 (proj2_sig (projT2 (Hdec p))))).
+      assert (HGs : tcp_summable (fun p => tcp_sum (F p))).
+      { assert (HGeq : (fun p => tcp_sum (F p)) = G)
+          by (apply funext; intros p; symmetry; apply HFs).
+        rewrite HGeq; unfold G.
+        apply (tcp_summable_conj Urqpair _ (proj1 Urqpair_unitary)
+                 (sampleLR_inner_wf r rm Hwf)). }
+      destruct (tcp_sum_sigma _ _ _ F HFa HGs) as [Hsig Heqsig].
+      split.
+      - exact Hsig.
+      - transitivity (tcp_sum (fun p => tcp_sum (F p))).
+        + f_equal; apply funext; intros p; apply HFs.
+        + exact Heqsig.
+    Qed.
+
+    (* --------------------------------------------------------------- *)
+    (** *** The precondition
+
+        [A := Cla[marginal_1(f) = idx_1 e_1] cap Cla[marginal_2(f) = idx_2 e_2]
+              cap Inter_{(z1,z2)} B{z1/x_1, z2/y_2}], the intersection again
+        written as an intersection over *all* of [ctype x * ctype y] with an
+        [htop] conjunct off the support -- the same device [Sample1_pre]
+        uses. *)
+
+    Definition JointSample_pre (B : pred) : pred :=
+      pmeet
+        (pmeet
+           (Cla (gmap2
+                   (fun (mu : distr (ctype x * ctype y)) (mu1 : distr (ctype x)) =>
+                      if excluded_middle_informative (dmarginal1 mu = mu1)
+                      then true else false)
+                   f (idx SL e1)))
+           (Cla (gmap2
+                   (fun (mu : distr (ctype x * ctype y)) (mu2 : distr (ctype y)) =>
+                      if excluded_middle_informative (dmarginal2 mu = mu2)
+                      then true else false)
+                   f (idx SR e2))))
+        (pInf (fun z : ctype x * ctype y =>
+                 gmap2 (fun (mu : distr (ctype x * ctype y)) (b : hspace rqmem) =>
+                          if excluded_middle_informative (0 < mu z)%R
+                          then b else htop)
+                       f (rsubst_val (rsubst_val B (SL, x) (fst z))
+                                     (SR, y) (snd z)))).
+
+    Lemma sampleLR_psat (r : rcqs) (B : pred) :
+      rcqs_wf r -> psat r (JointSample_pre B) -> psat (sampleLR r) B.
+    Proof.
+      intros Hwf Hsat rm; unfold sampleLR.
+      rewrite (tcp_supp_sum _ _ _ (sampleLR_inner_wf r rm Hwf)).
+      apply hSup_lub; intros p.
+      destruct (Rle_lt_or_eq_dec 0 (jwt rm p) (jwt_nonneg rm p))
+        as [Hpos | Hzero].
+      - rewrite (tcp_supp_scale _ _ _ Hpos).
+        eapply hle_trans;
+          [ apply (Hsat (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))) |].
+        eapply hle_trans; [ apply hmeet_ler |].
+        eapply hle_trans;
+          [ apply (hInf_lb
+                     (fun z : ctype x * ctype y =>
+                        ev (gmap2
+                              (fun (mu : distr (ctype x * ctype y))
+                                   (b : hspace rqmem) =>
+                                 if excluded_middle_informative (0 < mu z)%R
+                                 then b else htop)
+                              f (rsubst_val (rsubst_val B (SL, x) (fst z))
+                                            (SR, y) (snd z)))
+                           (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p)))
+                     (csel SL rm x, csel SR rm y)) |].
+        cbn [ev gmap2].
+        destruct (excluded_middle_informative
+                    (0 < ev f (rcupd (rcupd rm (SL, x) (fst p)) (SR, y) (snd p))
+                           (csel SL rm x, csel SR rm y))%R)
+          as [_ | Hno].
+        + rewrite ev_rsubst_val, ev_rsubst_val, rcupd2_id; apply hle_refl.
+        + exfalso; apply Hno; exact Hpos.
+      - rewrite <- Hzero, tcp_scale_0.
+        rewrite (proj2 (tcp_supp_eq0 _ _) eq_refl); apply hbot_le.
+    Qed.
+
+
+    (* --------------------------------------------------------------- *)
+    (** *** The two projections
+
+        Unlike [Sample1] -- where the un-sampled side is free, and only the
+        sampled side needs a marginal identity -- here *both* sides need one:
+        [x] is sampled on the left and [y] on the right, so marginalizing
+        either one out of [f] needs the precondition's marginal equation. The
+        proof of each projection has two layers: for each *kept* value
+        ([a] for the left projection, [b] for the right), the *other*
+        variable and the other side's classical memory collapse together via
+        [sbeta] and the marginal identity (mirroring [sampleL_projR]'s
+        totality collapse); then the kept values are brought to the front via
+        [tcp_sum_pair]/[tcp_sum_swap] (mirroring [sampleL_projL]). *)
+
+    Lemma sampleLR_projL_inner (r : rcqs) :
+      rcqs_wf r ->
+      (forall rm, r rm <> tcp_zero -> dmarginal1 (ev f rm) = ev e1 (csel SL rm)) ->
+      forall (m1 : cmem) (a : ctype x),
+        tcp_summable (fun p : cmem * ctype y =>
+                        tcp_scale (jwt (m1, fst p) (a, snd p))
+                          (rtcpL (r (cupd m1 x a, cupd (fst p) y (snd p)))))
+        /\ tcp_sum (fun p : cmem * ctype y =>
+                   tcp_scale (jwt (m1, fst p) (a, snd p))
+                             (rtcpL (r (cupd m1 x a, cupd (fst p) y (snd p)))))
+        = tcp_scale (ev e1 (cupd m1 x a) (m1 x)) (rcqs_projL r (cupd m1 x a)).
+    Proof.
+      intros Hwf Htot1 m1 a.
+      set (Hsrc := fun (m2' : cmem) (z : ctype y) =>
+                     tcp_scale (ev f (cupd m1 x a, m2') (m1 x, z))
+                               (rtcpL (r (cupd m1 x a, m2')))).
+      assert (HGH : (fun p : cmem * ctype y =>
+                       tcp_scale (jwt (m1, fst p) (a, snd p))
+                                 (rtcpL (r (cupd m1 x a, cupd (fst p) y (snd p)))))
+                    = (fun p : cmem * ctype y =>
+                         Hsrc (fst (sbeta y p)) (snd (sbeta y p))))
+        by (apply funext; intros p; reflexivity).
+      assert (Hbsum1 : forall m2', summable (fun z : ctype y =>
+                        ev f (cupd m1 x a, m2') (m1 x, z))).
+      { intros m2'; apply (summable_inj (fun z : ctype y => (m1 x, z))
+                   (dfun (ev f (cupd m1 x a, m2'))));
+          [ intros u v Huv; exact (f_equal snd Huv) | apply dfun_summable ]. }
+      assert (Hbnn1 : forall m2' z, (0 <= ev f (cupd m1 x a, m2') (m1 x, z))%R)
+        by (intros m2' z; apply (dfun_nonneg (ev f (cupd m1 x a, m2')) (m1 x, z))).
+      assert (HsrcS : forall m2', tcp_summable (fun z => Hsrc m2' z)).
+      { intros m2'; apply tcp_summable_trace.
+        apply (summable_mono _ (fun z : ctype y =>
+                 (tcp_trace (rtcpL (r (cupd m1 x a, m2')))
+                  * ev f (cupd m1 x a, m2') (m1 x, z))%R)).
+        - exact (summable_scale (tcp_trace (rtcpL (r (cupd m1 x a, m2'))))
+                   (fun z : ctype y => ev f (cupd m1 x a, m2') (m1 x, z))
+                   (tcp_trace_nonneg _ _) (Hbnn1 m2') (Hbsum1 m2')).
+        - intros z; unfold Hsrc; rewrite tcp_trace_scale; apply Req_le; ring. }
+      assert (HsrcV : forall m2',
+                 tcp_sum (fun z => Hsrc m2' z)
+                 = tcp_scale (ev e1 (cupd m1 x a) (m1 x))
+                             (rtcpL (r (cupd m1 x a, m2')))).
+      { intros m2'; unfold Hsrc.
+        rewrite (tcp_sum_scale_const _ _
+                   (fun z => ev f (cupd m1 x a, m2') (m1 x, z)) _
+                   (Hbnn1 m2') (Hbsum1 m2')).
+        destruct (classic (r (cupd m1 x a, m2') = tcp_zero)) as [Hz | Hz].
+        - rewrite Hz, rtcpL_zero, !tcp_scale_zero; reflexivity.
+        - assert (Hmarg : dmarginal1 (ev f (cupd m1 x a, m2'))
+                          = ev e1 (csel SL (cupd m1 x a, m2')))
+            by (apply Htot1; exact Hz).
+          assert (Heq : tsum (fun z => ev f (cupd m1 x a, m2') (m1 x, z))
+                        = ev e1 (cupd m1 x a) (m1 x)).
+          { transitivity (dmarginal1 (ev f (cupd m1 x a, m2')) (m1 x));
+              [ reflexivity |].
+            exact (f_equal (fun mu : distr (ctype x) => mu (m1 x)) Hmarg). }
+          rewrite Heq; reflexivity. }
+      assert (HsrcIt : tcp_summable (fun m2' => tcp_sum (fun z => Hsrc m2' z))).
+      { assert (Heq : (fun m2' => tcp_sum (fun z => Hsrc m2' z))
+                      = (fun m2' => tcp_scale (ev e1 (cupd m1 x a) (m1 x))
+                                              (rtcpL (r (cupd m1 x a, m2')))))
+          by (apply funext; intros m2'; apply HsrcV).
+        rewrite Heq; apply tcp_summable_trace.
+        apply (summable_mono _ (fun m2' => tcp_trace (rtcpL (r (cupd m1 x a, m2'))))).
+        - apply tcp_summable_trace, (rcqs_slice_wf r (cupd m1 x a) Hwf).
+        - intros m2'; rewrite tcp_trace_scale.
+          rewrite <- (Rmult_1_l (tcp_trace (rtcpL (r (cupd m1 x a, m2'))))) at 2.
+          apply Rmult_le_compat_r;
+            [ apply tcp_trace_nonneg | apply dfun_le1_pt ]. }
+      destruct (tcp_sum_pair Hsrc HsrcS HsrcIt) as [HsrcP HsrcEq].
+      destruct (tcp_sum_bij _ _ _ (sbeta y) (sbeta y)
+                  (fun q : cmem * ctype y => Hsrc (fst q) (snd q))
+                  (sbeta_invol y) (sbeta_invol y) HsrcP) as [HJ Hbij].
+      split.
+      - rewrite HGH; exact HJ.
+      - rewrite HGH, Hbij, <- HsrcEq.
+        transitivity (tcp_sum (fun m2' => tcp_scale (ev e1 (cupd m1 x a) (m1 x))
+                                                     (rtcpL (r (cupd m1 x a, m2'))))).
+        { f_equal; apply funext; intros m2'; apply HsrcV. }
+        rewrite <- (tcp_scale_sum _ _ _ _ (rcqs_slice_wf r (cupd m1 x a) Hwf)).
+        reflexivity.
+    Qed.
+
+
+    Lemma sampleLR_projL (r : rcqs) :
+      rcqs_wf r ->
+      (forall rm, r rm <> tcp_zero -> dmarginal1 (ev f rm) = ev e1 (csel SL rm)) ->
+      rcqs_projL (sampleLR r) = sem_sample x e1 (rcqs_projL r).
+    Proof.
+      intros Hwf Htot1; apply funext; intros m1.
+      set (Fab := fun (m2 : cmem) (a : ctype x) (b : ctype y) =>
+                    tcp_scale (jwt (m1, m2) (a, b))
+                              (rtcpL (r (cupd m1 x a, cupd m2 y b)))).
+      (* [rtcpL (sampleLR r (m1,m2))], unfolded into [Fab] *)
+      assert (HA : forall m2,
+                 rtcpL (sampleLR r (m1, m2))
+                 = tcp_sum (fun p : ctype x * ctype y => Fab m2 (fst p) (snd p))).
+      { intros m2; unfold sampleLR.
+        rewrite (rtcpL_sum _ (sampleLR_inner_wf r (m1, m2) Hwf)).
+        f_equal; apply funext; intros [a b]; unfold Fab; cbn [fst snd].
+        apply rtcpL_scale. }
+      (* summability of [Fab m2 -] over (a,b), for each fixed m2 *)
+      assert (Hpwf : forall m2, tcp_summable
+                        (fun p : ctype x * ctype y => Fab m2 (fst p) (snd p))).
+      { intros m2.
+        assert (Heq : (fun p : ctype x * ctype y => Fab m2 (fst p) (snd p))
+                      = (fun p : ctype x * ctype y =>
+                           rtcpL (tcp_scale (jwt (m1, m2) p)
+                                   (r (rcupd (rcupd (m1, m2) (SL, x) (fst p))
+                                              (SR, y) (snd p))))))
+          by (apply funext; intros [a b]; unfold Fab; cbn [fst snd];
+              symmetry; apply rtcpL_scale).
+        rewrite Heq; apply rtcpL_summable, (sampleLR_inner_wf r (m1, m2) Hwf). }
+      (* summability of the m2-indexed outer sum *)
+      assert (HmIt : tcp_summable
+                       (fun m2 => tcp_sum (fun p => Fab m2 (fst p) (snd p)))).
+      { assert (Heq : (fun m2 => tcp_sum (fun p => Fab m2 (fst p) (snd p)))
+                      = (fun m2 => rtcpL (sampleLR r (m1, m2))))
+          by (apply funext; intros m2; symmetry; apply HA).
+        rewrite Heq; apply (rcqs_slice_wf (sampleLR r) m1 (sampleLR_wf r Hwf)). }
+      (* the pair-flattened, [cmem * (ctype x * ctype y)]-indexed, version *)
+      destruct (tcp_sum_pair
+                  (fun m2 p => Fab m2 (fst p) (snd p)) Hpwf HmIt) as [HQ HQeq].
+      (* regroup: [cmem * (X * Y)] and [X * (cmem * Y)] are in bijection *)
+      set (sig1 := fun q : cmem * (ctype x * ctype y) =>
+                     (fst (snd q), (fst q, snd (snd q)))
+                   : ctype x * (cmem * ctype y)).
+      set (sig2 := fun j : ctype x * (cmem * ctype y) =>
+                     (fst (snd j), (fst j, snd (snd j)))
+                   : cmem * (ctype x * ctype y)).
+      assert (Hs12 : forall q, sig2 (sig1 q) = q)
+        by (intros [m2 [a b]]; reflexivity).
+      assert (Hs21 : forall j, sig1 (sig2 j) = j)
+        by (intros [a [m2 b]]; reflexivity).
+      destruct (tcp_sum_bij _ _ _ sig2 sig1
+                  (fun q : cmem * (ctype x * ctype y) =>
+                     Fab (fst q) (fst (snd q)) (snd (snd q)))
+                  Hs21 Hs12 HQ) as [HJ HJeq].
+      (* the [X * (cmem * Y)]-indexed sum, uncurried into a outer, (m2,b) inner *)
+      assert (Hqwf : forall a : ctype x,
+                 tcp_summable (fun q : cmem * ctype y => Fab (fst q) a (snd q))).
+      { intros a.
+        assert (Heq : (fun q : cmem * ctype y => Fab (fst q) a (snd q))
+                      = (fun p : cmem * ctype y =>
+                           tcp_scale (jwt (m1, fst p) (a, snd p))
+                             (rtcpL (r (cupd m1 x a, cupd (fst p) y (snd p))))))
+          by (apply funext; intros [m2 b]; reflexivity).
+        rewrite Heq; apply (proj1 (sampleLR_projL_inner r Hwf Htot1 m1 a)). }
+      assert (HqIt : tcp_summable
+                       (fun a : ctype x => tcp_sum
+                          (fun q : cmem * ctype y => Fab (fst q) a (snd q)))).
+      { apply tcp_summable_trace.
+        apply (summable_mono _ (fun a : ctype x =>
+                 tcp_trace (rcqs_projL r (cupd m1 x a)))).
+        - apply (summable_inj (fun a : ctype x => cupd m1 x a)
+                              (fun m => tcp_trace (rcqs_projL r m))).
+          + intros u v Huv.
+            rewrite <- (cupd_same m1 x u), Huv, cupd_same; reflexivity.
+          + apply tcp_summable_trace, rcqs_projL_wf; exact Hwf.
+        - intros a.
+          transitivity (tcp_trace
+                          (tcp_scale (ev e1 (cupd m1 x a) (m1 x))
+                             (rcqs_projL r (cupd m1 x a)))).
+          + apply Req_le; f_equal;
+              apply (proj2 (sampleLR_projL_inner r Hwf Htot1 m1 a)).
+          + rewrite tcp_trace_scale.
+            rewrite <- (Rmult_1_l (tcp_trace (rcqs_projL r (cupd m1 x a)))) at 2.
+            apply Rmult_le_compat_r;
+              [ apply tcp_trace_nonneg | apply dfun_le1_pt ]. }
+      destruct (tcp_sum_pair
+                  (fun a q => Fab (fst q) a (snd q)) Hqwf HqIt) as [_ HKeq].
+      (* chain everything together *)
+      unfold rcqs_projL at 1, sem_sample.
+      transitivity (tcp_sum (fun m2 => tcp_sum (fun p => Fab m2 (fst p) (snd p)))).
+      { f_equal; apply funext; apply HA. }
+      rewrite HQeq.
+      transitivity (tcp_sum (fun j : ctype x * (cmem * ctype y) =>
+                      Fab (fst (snd j)) (fst j) (snd (snd j)))).
+      { transitivity (tcp_sum (fun j : ctype x * (cmem * ctype y) =>
+                        Fab (fst (sig2 j)) (fst (snd (sig2 j))) (snd (snd (sig2 j))))).
+        - symmetry; exact HJeq.
+        - f_equal; apply funext; intros [a [m2 b]]; reflexivity. }
+      rewrite <- HKeq.
+      f_equal; apply funext; intros a.
+      apply (proj2 (sampleLR_projL_inner r Hwf Htot1 m1 a)).
+    Qed.
+
+    Lemma sampleLR_projR_inner (r : rcqs) :
+      rcqs_wf r ->
+      (forall rm, r rm <> tcp_zero -> dmarginal2 (ev f rm) = ev e2 (csel SR rm)) ->
+      forall (m2 : cmem) (b : ctype y),
+        tcp_summable (fun p : cmem * ctype x =>
+                        tcp_scale (jwt (fst p, m2) (snd p, b))
+                          (rtcpR (r (cupd (fst p) x (snd p), cupd m2 y b))))
+        /\ tcp_sum (fun p : cmem * ctype x =>
+                   tcp_scale (jwt (fst p, m2) (snd p, b))
+                             (rtcpR (r (cupd (fst p) x (snd p), cupd m2 y b))))
+        = tcp_scale (ev e2 (cupd m2 y b) (m2 y)) (rcqs_projR r (cupd m2 y b)).
+    Proof.
+      intros Hwf Htot2 m2 b.
+      set (Hsrc := fun (m1' : cmem) (z : ctype x) =>
+                     tcp_scale (ev f (m1', cupd m2 y b) (z, m2 y))
+                               (rtcpR (r (m1', cupd m2 y b)))).
+      assert (HGH : (fun p : cmem * ctype x =>
+                       tcp_scale (jwt (fst p, m2) (snd p, b))
+                                 (rtcpR (r (cupd (fst p) x (snd p), cupd m2 y b))))
+                    = (fun p : cmem * ctype x =>
+                         Hsrc (fst (sbeta x p)) (snd (sbeta x p))))
+        by (apply funext; intros p; reflexivity).
+      assert (Hbsum2 : forall m1', summable (fun z : ctype x =>
+                        ev f (m1', cupd m2 y b) (z, m2 y))).
+      { intros m1'; apply (summable_inj (fun z : ctype x => (z, m2 y))
+                   (dfun (ev f (m1', cupd m2 y b))));
+          [ intros u v Huv; exact (f_equal fst Huv) | apply dfun_summable ]. }
+      assert (Hbnn2 : forall m1' z, (0 <= ev f (m1', cupd m2 y b) (z, m2 y))%R)
+        by (intros m1' z; apply (dfun_nonneg (ev f (m1', cupd m2 y b)) (z, m2 y))).
+      assert (HsrcS : forall m1', tcp_summable (fun z => Hsrc m1' z)).
+      { intros m1'; apply tcp_summable_trace.
+        apply (summable_mono _ (fun z : ctype x =>
+                 (tcp_trace (rtcpR (r (m1', cupd m2 y b)))
+                  * ev f (m1', cupd m2 y b) (z, m2 y))%R)).
+        - exact (summable_scale (tcp_trace (rtcpR (r (m1', cupd m2 y b))))
+                   (fun z : ctype x => ev f (m1', cupd m2 y b) (z, m2 y))
+                   (tcp_trace_nonneg _ _) (Hbnn2 m1') (Hbsum2 m1')).
+        - intros z; unfold Hsrc; rewrite tcp_trace_scale; apply Req_le; ring. }
+      assert (HsrcV : forall m1',
+                 tcp_sum (fun z => Hsrc m1' z)
+                 = tcp_scale (ev e2 (cupd m2 y b) (m2 y))
+                             (rtcpR (r (m1', cupd m2 y b)))).
+      { intros m1'; unfold Hsrc.
+        rewrite (tcp_sum_scale_const _ _
+                   (fun z => ev f (m1', cupd m2 y b) (z, m2 y)) _
+                   (Hbnn2 m1') (Hbsum2 m1')).
+        destruct (classic (r (m1', cupd m2 y b) = tcp_zero)) as [Hz | Hz].
+        - rewrite Hz, rtcpR_zero, !tcp_scale_zero; reflexivity.
+        - assert (Hmarg : dmarginal2 (ev f (m1', cupd m2 y b))
+                          = ev e2 (csel SR (m1', cupd m2 y b)))
+            by (apply Htot2; exact Hz).
+          assert (Heq : tsum (fun z => ev f (m1', cupd m2 y b) (z, m2 y))
+                        = ev e2 (cupd m2 y b) (m2 y)).
+          { transitivity (dmarginal2 (ev f (m1', cupd m2 y b)) (m2 y));
+              [ reflexivity |].
+            exact (f_equal (fun mu : distr (ctype y) => mu (m2 y)) Hmarg). }
+          rewrite Heq; reflexivity. }
+      assert (HsrcIt : tcp_summable (fun m1' => tcp_sum (fun z => Hsrc m1' z))).
+      { assert (Heq : (fun m1' => tcp_sum (fun z => Hsrc m1' z))
+                      = (fun m1' => tcp_scale (ev e2 (cupd m2 y b) (m2 y))
+                                              (rtcpR (r (m1', cupd m2 y b)))))
+          by (apply funext; intros m1'; apply HsrcV).
+        rewrite Heq; apply tcp_summable_trace.
+        apply (summable_mono _ (fun m1' => tcp_trace (rtcpR (r (m1', cupd m2 y b))))).
+        - apply tcp_summable_trace, (rcqs_slice_wf_R r (cupd m2 y b) Hwf).
+        - intros m1'; rewrite tcp_trace_scale.
+          rewrite <- (Rmult_1_l (tcp_trace (rtcpR (r (m1', cupd m2 y b))))) at 2.
+          apply Rmult_le_compat_r;
+            [ apply tcp_trace_nonneg | apply dfun_le1_pt ]. }
+      destruct (tcp_sum_pair Hsrc HsrcS HsrcIt) as [HsrcP HsrcEq].
+      destruct (tcp_sum_bij _ _ _ (sbeta x) (sbeta x)
+                  (fun q : cmem * ctype x => Hsrc (fst q) (snd q))
+                  (sbeta_invol x) (sbeta_invol x) HsrcP) as [HJ Hbij].
+      split.
+      - rewrite HGH; exact HJ.
+      - rewrite HGH, Hbij, <- HsrcEq.
+        transitivity (tcp_sum (fun m1' => tcp_scale (ev e2 (cupd m2 y b) (m2 y))
+                                                     (rtcpR (r (m1', cupd m2 y b))))).
+        { f_equal; apply funext; intros m1'; apply HsrcV. }
+        rewrite <- (tcp_scale_sum _ _ _ _ (rcqs_slice_wf_R r (cupd m2 y b) Hwf)).
+        reflexivity.
+    Qed.
+
+    Lemma sampleLR_projR (r : rcqs) :
+      rcqs_wf r ->
+      (forall rm, r rm <> tcp_zero -> dmarginal2 (ev f rm) = ev e2 (csel SR rm)) ->
+      rcqs_projR (sampleLR r) = sem_sample y e2 (rcqs_projR r).
+    Proof.
+      intros Hwf Htot2; apply funext; intros m2.
+      set (Fab := fun (m1 : cmem) (a : ctype x) (b : ctype y) =>
+                    tcp_scale (jwt (m1, m2) (a, b))
+                              (rtcpR (r (cupd m1 x a, cupd m2 y b)))).
+      assert (HA : forall m1,
+                 rtcpR (sampleLR r (m1, m2))
+                 = tcp_sum (fun p : ctype x * ctype y => Fab m1 (fst p) (snd p))).
+      { intros m1; unfold sampleLR.
+        rewrite (rtcpR_sum _ (sampleLR_inner_wf r (m1, m2) Hwf)).
+        f_equal; apply funext; intros [a b]; unfold Fab; cbn [fst snd].
+        apply rtcpR_scale. }
+      assert (Hpwf : forall m1, tcp_summable
+                        (fun p : ctype x * ctype y => Fab m1 (fst p) (snd p))).
+      { intros m1.
+        assert (Heq : (fun p : ctype x * ctype y => Fab m1 (fst p) (snd p))
+                      = (fun p : ctype x * ctype y =>
+                           rtcpR (tcp_scale (jwt (m1, m2) p)
+                                   (r (rcupd (rcupd (m1, m2) (SL, x) (fst p))
+                                              (SR, y) (snd p))))))
+          by (apply funext; intros [a b]; unfold Fab; cbn [fst snd];
+              symmetry; apply rtcpR_scale).
+        rewrite Heq; apply rtcpR_summable, (sampleLR_inner_wf r (m1, m2) Hwf). }
+      assert (HmIt : tcp_summable
+                       (fun m1 => tcp_sum (fun p => Fab m1 (fst p) (snd p)))).
+      { assert (Heq : (fun m1 => tcp_sum (fun p => Fab m1 (fst p) (snd p)))
+                      = (fun m1 => rtcpR (sampleLR r (m1, m2))))
+          by (apply funext; intros m1; symmetry; apply HA).
+        rewrite Heq; apply (rcqs_slice_wf_R (sampleLR r) m2 (sampleLR_wf r Hwf)). }
+      destruct (tcp_sum_pair
+                  (fun m1 p => Fab m1 (fst p) (snd p)) Hpwf HmIt) as [HQ HQeq].
+      set (sig1 := fun q : cmem * (ctype x * ctype y) =>
+                     (snd (snd q), (fst q, fst (snd q)))
+                   : ctype y * (cmem * ctype x)).
+      set (sig2 := fun j : ctype y * (cmem * ctype x) =>
+                     (fst (snd j), (snd (snd j), fst j))
+                   : cmem * (ctype x * ctype y)).
+      assert (Hs12 : forall q, sig2 (sig1 q) = q)
+        by (intros [m1 [a b]]; reflexivity).
+      assert (Hs21 : forall j, sig1 (sig2 j) = j)
+        by (intros [b [m1 a]]; reflexivity).
+      destruct (tcp_sum_bij _ _ _ sig2 sig1
+                  (fun q : cmem * (ctype x * ctype y) =>
+                     Fab (fst q) (fst (snd q)) (snd (snd q)))
+                  Hs21 Hs12 HQ) as [HJ HJeq].
+      assert (Hqwf : forall b : ctype y,
+                 tcp_summable (fun q : cmem * ctype x => Fab (fst q) (snd q) b)).
+      { intros b.
+        assert (Heq : (fun q : cmem * ctype x => Fab (fst q) (snd q) b)
+                      = (fun p : cmem * ctype x =>
+                           tcp_scale (jwt (fst p, m2) (snd p, b))
+                             (rtcpR (r (cupd (fst p) x (snd p), cupd m2 y b)))))
+          by (apply funext; intros [m1 a]; reflexivity).
+        rewrite Heq; apply (proj1 (sampleLR_projR_inner r Hwf Htot2 m2 b)). }
+      assert (HqIt : tcp_summable
+                       (fun b : ctype y => tcp_sum
+                          (fun q : cmem * ctype x => Fab (fst q) (snd q) b))).
+      { apply tcp_summable_trace.
+        apply (summable_mono _ (fun b : ctype y =>
+                 tcp_trace (rcqs_projR r (cupd m2 y b)))).
+        - apply (summable_inj (fun b : ctype y => cupd m2 y b)
+                              (fun m => tcp_trace (rcqs_projR r m))).
+          + intros u v Huv.
+            rewrite <- (cupd_same m2 y u), Huv, cupd_same; reflexivity.
+          + apply tcp_summable_trace, rcqs_projR_wf; exact Hwf.
+        - intros b.
+          transitivity (tcp_trace
+                          (tcp_scale (ev e2 (cupd m2 y b) (m2 y))
+                             (rcqs_projR r (cupd m2 y b)))).
+          + apply Req_le; f_equal;
+              apply (proj2 (sampleLR_projR_inner r Hwf Htot2 m2 b)).
+          + rewrite tcp_trace_scale.
+            rewrite <- (Rmult_1_l (tcp_trace (rcqs_projR r (cupd m2 y b)))) at 2.
+            apply Rmult_le_compat_r;
+              [ apply tcp_trace_nonneg | apply dfun_le1_pt ]. }
+      destruct (tcp_sum_pair
+                  (fun b q => Fab (fst q) (snd q) b) Hqwf HqIt) as [_ HKeq].
+      unfold rcqs_projR at 1, sem_sample.
+      transitivity (tcp_sum (fun m1 => tcp_sum (fun p => Fab m1 (fst p) (snd p)))).
+      { f_equal; apply funext; apply HA. }
+      rewrite HQeq.
+      transitivity (tcp_sum (fun j : ctype y * (cmem * ctype x) =>
+                      Fab (fst (snd j)) (snd (snd j)) (fst j))).
+      { transitivity (tcp_sum (fun j : ctype y * (cmem * ctype x) =>
+                        Fab (fst (sig2 j)) (fst (snd (sig2 j))) (snd (snd (sig2 j))))).
+        - symmetry; exact HJeq.
+        - f_equal; apply funext; intros [b [m1 a]]; reflexivity. }
+      rewrite <- HKeq.
+      f_equal; apply funext; intros b.
+      apply (proj2 (sampleLR_projR_inner r Hwf Htot2 m2 b)).
+    Qed.
+
+
+    (* --------------------------------------------------------------- *)
+    (** *** The rule *)
+
+    Theorem rule_JointSample (B : pred) :
+      qrhl (JointSample_pre B) (Sample x e1) (Sample y e2) B.
+    Proof.
+      intros r Hwf Hsep Hsat.
+      assert (Hple1 : ple (JointSample_pre B)
+                (Cla (gmap2
+                        (fun (mu : distr (ctype x * ctype y)) (mu1 : distr (ctype x)) =>
+                           if excluded_middle_informative (dmarginal1 mu = mu1)
+                           then true else false)
+                        f (idx SL e1)))).
+      { intros rm'; eapply hle_trans; [ apply hmeet_lel | apply hmeet_lel ]. }
+      assert (Hple2 : ple (JointSample_pre B)
+                (Cla (gmap2
+                        (fun (mu : distr (ctype x * ctype y)) (mu2 : distr (ctype y)) =>
+                           if excluded_middle_informative (dmarginal2 mu = mu2)
+                           then true else false)
+                        f (idx SR e2)))).
+      { intros rm'; eapply hle_trans; [ apply hmeet_lel | apply hmeet_ler ]. }
+      assert (Htot1 : forall rm, r rm <> tcp_zero ->
+                                 dmarginal1 (ev f rm) = ev e1 (csel SL rm)).
+      { intros rm Hnz.
+        pose proof (proj1 (psat_Cla r _)
+                      (psat_mono r (JointSample_pre B) _ Hple1 Hsat) rm Hnz) as Hc.
+        cbn [ev gmap2] in Hc; unfold idx in Hc; cbn [ev] in Hc.
+        destruct (excluded_middle_informative (dmarginal1 (ev f rm) = ev e1 (csel SL rm)));
+          [ assumption | discriminate Hc ]. }
+      assert (Htot2 : forall rm, r rm <> tcp_zero ->
+                                 dmarginal2 (ev f rm) = ev e2 (csel SR rm)).
+      { intros rm Hnz.
+        pose proof (proj1 (psat_Cla r _)
+                      (psat_mono r (JointSample_pre B) _ Hple2 Hsat) rm Hnz) as Hc.
+        cbn [ev gmap2] in Hc; unfold idx in Hc; cbn [ev] in Hc.
+        destruct (excluded_middle_informative (dmarginal2 (ev f rm) = ev e2 (csel SR rm)));
+          [ assumption | discriminate Hc ]. }
+      exists (sampleLR r); repeat split.
+      - apply sampleLR_wf; exact Hwf.
+      - apply sampleLR_sep; assumption.
+      - apply sampleLR_psat; assumption.
+      - cbn [denote]; apply sampleLR_projL; assumption.
+      - cbn [denote]; apply sampleLR_projR; assumption.
+    Qed.
+
+  End JointSample.
+
   (* ================================================================= *)
   (** ** JointIf  [Figure 2, Lemma 59, p. 64]
 

@@ -11,9 +11,10 @@
     need the order structure on positive operators.
 
     Following the project's discipline, the lemma set here is grown on demand
-    by the proofs that need it rather than written speculatively. Notably,
-    Fubini for unordered nonnegative sums -- needed only by rule JointSample,
-    for [marginal1] / [marginal2] -- is deliberately not here yet. *)
+    by the proofs that need it rather than written speculatively. Fubini for
+    unordered nonnegative sums -- [tsum_tonelli], [tsum_iter_le_pairs] below --
+    is what rule JointSample's marginals ([marginal1] / [marginal2], at the end
+    of this file) turn out to need. *)
 
 From Stdlib Require Import List Arith Lra.
 From QRHL.Substrate Require Import Ambient.
@@ -920,3 +921,91 @@ Proof.
   assert (f = g) by (apply funext; exact H); subst g.
   f_equal; apply proof_irrel.
 Qed.
+
+(* ------------------------------------------------------------------ *)
+(** ** Marginals
+
+    Needed only by rule JointSample: given a subdistribution on a product
+    type, its two marginals are subdistributions on the factors, and this is
+    where [tsum_iter_le_pairs] finally earns its keep as advertised in this
+    file's header. The two are mirror images -- [marginal2] additionally
+    reindexes along the pair swap, since [tsum_iter_le_pairs] always sums the
+    *second* component of its pair type. *)
+
+Definition marginal1 {A B : Type} (mu : distr (A * B)) : A -> R :=
+  fun a => tsum (fun b => mu (a, b)).
+
+Definition marginal2 {A B : Type} (mu : distr (A * B)) : B -> R :=
+  fun b => tsum (fun a => mu (a, b)).
+
+Lemma marginal1_nonneg {A B} (mu : distr (A * B)) : nonneg (marginal1 mu).
+Proof. intros a; apply tsum_nonneg; intros b; apply dfun_nonneg. Qed.
+
+Lemma marginal1_iter_le_pairs {A B} (mu : distr (A * B)) :
+  nonneg (fun q : A * B => mu (fst q, snd q))
+  /\ summable (fun q : A * B => mu (fst q, snd q)).
+Proof.
+  assert (Heq : (fun q : A * B => mu (fst q, snd q)) = dfun mu)
+    by (apply funext; intros [a b]; reflexivity).
+  rewrite Heq; split; [ apply dfun_nonneg | apply dfun_summable ].
+Qed.
+
+Lemma marginal1_summable {A B} (mu : distr (A * B)) : summable (marginal1 mu).
+Proof.
+  destruct (marginal1_iter_le_pairs mu) as [Hpos Hsum].
+  exact (proj1 (tsum_iter_le_pairs (fun a b => mu (a, b)) Hpos Hsum)).
+Qed.
+
+Lemma marginal1_le1 {A B} (mu : distr (A * B)) : (tsum (marginal1 mu) <= 1)%R.
+Proof.
+  destruct (marginal1_iter_le_pairs mu) as [Hpos Hsum].
+  eapply Rle_trans;
+    [ apply (proj2 (tsum_iter_le_pairs (fun a b => mu (a, b)) Hpos Hsum)) |].
+  assert (Heq : (fun q : A * B => mu (fst q, snd q)) = dfun mu)
+    by (apply funext; intros [a b]; reflexivity).
+  rewrite Heq; apply dfun_le1.
+Qed.
+
+Definition dmarginal1 {A B} (mu : distr (A * B)) : distr A :=
+  mkDistr (marginal1 mu) (marginal1_nonneg mu) (marginal1_summable mu)
+          (marginal1_le1 mu).
+
+Lemma marginal2_nonneg {A B} (mu : distr (A * B)) : nonneg (marginal2 mu).
+Proof. intros b; apply tsum_nonneg; intros a; apply dfun_nonneg. Qed.
+
+(** The pair swap is its own inverse, so it is injective in either
+    direction -- used both to move [dfun mu] under the swap and to reindex
+    the bound back afterwards. *)
+Lemma swap_pair_inj {A B : Type} :
+  forall a b : B * A, (snd a, fst a) = (snd b, fst b) -> a = b.
+Proof. intros [b1 a1] [b2 a2] H; cbn in H; congruence. Qed.
+
+Lemma marginal2_iter_le_pairs {A B} (mu : distr (A * B)) :
+  nonneg (fun q : B * A => mu (snd q, fst q))
+  /\ summable (fun q : B * A => mu (snd q, fst q)).
+Proof.
+  split; [ intros [b a]; apply dfun_nonneg |].
+  apply (summable_inj (fun q : B * A => (snd q, fst q)) (dfun mu)
+           swap_pair_inj (dfun_summable mu)).
+Qed.
+
+Lemma marginal2_summable {A B} (mu : distr (A * B)) : summable (marginal2 mu).
+Proof.
+  destruct (marginal2_iter_le_pairs mu) as [Hpos Hsum].
+  exact (proj1 (tsum_iter_le_pairs (fun b a => mu (a, b)) Hpos Hsum)).
+Qed.
+
+Lemma marginal2_le1 {A B} (mu : distr (A * B)) : (tsum (marginal2 mu) <= 1)%R.
+Proof.
+  destruct (marginal2_iter_le_pairs mu) as [Hpos Hsum].
+  eapply Rle_trans;
+    [ apply (proj2 (tsum_iter_le_pairs (fun b a => mu (a, b)) Hpos Hsum)) |].
+  eapply Rle_trans.
+  - apply (tsum_inj_le (fun q : B * A => (snd q, fst q)) (dfun mu)
+             swap_pair_inj (dfun_summable mu)).
+  - apply dfun_le1.
+Qed.
+
+Definition dmarginal2 {A B} (mu : distr (A * B)) : distr B :=
+  mkDistr (marginal2 mu) (marginal2_nonneg mu) (marginal2_summable mu)
+          (marginal2_le1 mu).
