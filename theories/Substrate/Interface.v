@@ -210,9 +210,23 @@ Module Type HILBERT_SUBSTRATE.
   Parameter oopp   : forall {X Y}, op X Y -> op X Y.
   Parameter oscale : forall {X Y}, C -> op X Y -> op X Y.
 
-  (** Operators are determined by their action. *)
-  Axiom op_ext : forall X Y (A B : op X Y),
-      (forall v, oapp A v = oapp B v) -> A = B.
+  (** Operators are determined by their action on the computational basis --
+      the totality of an orthonormal basis. This is strictly stronger than
+      extensionality over *all* vectors (which it implies, by specializing to
+      [v := ket x]): agreeing on a spanning set forces agreement everywhere,
+      including on vectors -- infinite sums of kets -- that are not
+      themselves finite combinations of basis vectors. That gap is exactly
+      the continuity [Ubij_unitary]'s comment declines to expose, so unlike
+      that axiom this one cannot be derived and has to be assumed directly.
+
+      What it buys: every unitary in the development ([Wsplit], [Urqpair],
+      the register reassociations, the side swap) is a [Ubij] or a [tensoro]
+      of [Ubij]s, and those send kets to kets (see [Ubij_ket] below and
+      [tensoro_app] combined with [tensorv_ket]), so any identity between
+      *composites* of them becomes an index-level computation instead of an
+      analytic one. *)
+  Axiom op_ext_ket : forall X Y (A B : op X Y),
+      (forall x : X, oapp A (ket x) = oapp B (ket x)) -> A = B.
 
   Axiom oapp_vadd : forall X Y (A : op X Y) (u v : l2 X),
       oapp A (vadd u v) = vadd (oapp A u) (oapp A v).

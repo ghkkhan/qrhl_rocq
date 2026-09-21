@@ -122,4 +122,29 @@ Module Sanity (S : HILBERT_SUBSTRATE).
     apply C1_neq_C0; rewrite <- Hc; ring.
   Qed.
 
+  (* ------------------------------------------------------------------ *)
+  (** ** 5. [op_ext_ket] does not collapse distinct reindexings
+
+      [op_ext_ket] forces two operators to be equal whenever they agree on
+      *every* ket. A degenerate pairing with some other axiom could in
+      principle satisfy that hypothesis vacuously (e.g. if the basis
+      collapsed, or if [Ubij] failed to distinguish maps). It does not:
+      [Uswap], which exchanges the two factors of [Q * Q], really is
+      different from [oid], because they send [(true, false)] to different
+      kets and distinct basis vectors span distinct lines (canary 2). *)
+  Theorem canary_op_ext_ket_nondegenerate : @Uswap Q Q <> oid.
+  Proof.
+    intros Heq.
+    assert (Hc : ket (false, true) = ket (true, false) :> l2 (Q * Q)).
+    { transitivity (oapp (@Uswap Q Q) (ket (true, false))).
+      - rewrite Uswap_ket; reflexivity.
+      - rewrite Heq; apply oapp_oid. }
+    assert (Hcontra := f_equal (fun v => inner (ket (false, true)) v) Hc).
+    cbn beta in Hcontra.
+    rewrite inner_ket_same, inner_ket in Hcontra.
+    destruct (excluded_middle_informative ((false, true) = (true, false)))
+      as [Habs | _]; [ discriminate Habs |].
+    apply C1_neq_C0; exact Hcontra.
+  Qed.
+
 End Sanity.

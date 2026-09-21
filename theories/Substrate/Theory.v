@@ -109,6 +109,14 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     rewrite inner_conj, (H w), <- inner_conj; reflexivity.
   Qed.
 
+  (** Extensionality over *all* vectors, weakened from [op_ext_ket]'s
+      extensionality over just the computational basis: agreeing everywhere
+      certainly agrees on kets. Kept under the name the rest of the
+      development already uses. *)
+  Lemma op_ext {X Y} (A B : op X Y) :
+    (forall v, oapp A v = oapp B v) -> A = B.
+  Proof. intros H; apply op_ext_ket; intros x; apply H. Qed.
+
   Lemma op_ext_inner {X Y} (A B : op X Y) :
     (forall v w, inner w (oapp A v) = inner w (oapp B v)) -> A = B.
   Proof.
@@ -515,6 +523,33 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   (** Reindexing unitaries really are unitary, repackaged into the predicate. *)
   Lemma Ubij_ounitary {X Y} f g H1 H2 : ounitary (@Ubij X Y f g H1 H2).
   Proof. apply Ubij_unitary. Qed.
+
+  (** The identity reindexing is [oid], and composing two [Ubij]s along
+      composable index maps is the [Ubij] of the composite -- both index-level
+      computations once [op_ext_ket] is in hand. Every syntactic identity
+      between the reindexing unitaries used throughout the development
+      ([Wsplit], [Urqpair], the register reassociations, the side swap)
+      reduces to this pattern: unfold both sides via [Ubij_ket], and what
+      remains is an equation between the index maps. *)
+  Lemma Ubij_oid {X} (f : X -> X) (Hf : forall x, f (f x) = x) :
+    (forall x, f x = x) -> Ubij f f Hf Hf = oid.
+  Proof.
+    intros Hid; apply op_ext_ket; intros x.
+    rewrite Ubij_ket, oapp_oid, Hid; reflexivity.
+  Qed.
+
+  Lemma Ubij_ocomp {X Y Z} (f1 : X -> Y) (g1 : Y -> X) (H1 : forall x, g1 (f1 x) = x)
+        (H1' : forall y, f1 (g1 y) = y)
+        (f2 : Y -> Z) (g2 : Z -> Y) (H2 : forall y, g2 (f2 y) = y)
+        (H2' : forall z, f2 (g2 z) = z)
+        (H3 : forall x, g1 (g2 (f2 (f1 x))) = x)
+        (H3' : forall z, f2 (f1 (g1 (g2 z))) = z) :
+    ocomp (Ubij f2 g2 H2 H2') (Ubij f1 g1 H1 H1')
+    = Ubij (fun x => f2 (f1 x)) (fun z => g1 (g2 z)) H3 H3'.
+  Proof.
+    apply op_ext_ket; intros x.
+    rewrite oapp_ocomp, !Ubij_ket; reflexivity.
+  Qed.
 
   (* ================================================================= *)
   (** ** Images *)

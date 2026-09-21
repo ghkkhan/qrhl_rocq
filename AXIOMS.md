@@ -178,7 +178,7 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Parameter | `oadd` | `forall {X Y}, op X Y -> op X Y -> op X Y` |
 | Parameter | `oopp` | `forall {X Y}, op X Y -> op X Y` |
 | Parameter | `oscale` | `forall {X Y}, C -> op X Y -> op X Y` |
-| Axiom | `op_ext` | `forall X Y (A B : op X Y), (forall v, oapp A v = oapp B v) -> A = B` |
+| Axiom | `op_ext_ket` | `forall X Y (A B : op X Y), (forall x : X, oapp A (ket x) = oapp B (ket x)) -> A = B` |
 | Axiom | `oapp_vadd` | `forall X Y (A : op X Y) (u v : l2 X), oapp A (vadd u v) = vadd (oapp A u) (oapp A v)` |
 | Axiom | `oapp_vscale` | `forall X Y (A : op X Y) (a : C) (v : l2 X), oapp A (vscale a v) = vscale a (oapp A v)` |
 | Axiom | `oapp_oid` | `forall X (v : l2 X), oapp oid v = v` |
