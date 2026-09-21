@@ -458,6 +458,55 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Lemma Urqpair_ket (m : rqmem) : oapp Urqpair (ket m) = ket (rq_pair m).
   Proof. apply Ubij_ket. Qed.
 
+  (** The register-coherence identity [QInit1] needs (HANDOFF.md S7d):
+      splitting [rqmem] directly along one side's copy of a register agrees,
+      on kets, with splitting off that side first ([Urqpair]) and then
+      splitting *its* register ([Usplit Q]). Unlike the monolithic dependent
+      [Ubij] S7d anticipated, this needs no new bijection at all: both the
+      register-half and the untouched-side-half of the complement land in
+      their target types *by computation* once the side is concrete (compare
+      [Urelab]), so the whole identity is a [wjoin] unfolding plus a
+      [destruct] on the memory's side, exactly the [rq_pair_swap] pattern. *)
+  Lemma wjoin_qidx_SL (Q : qset) (vq : rqsub (qidx SL Q)) (vw : rqsub (rqneg (qidx SL Q))) :
+    wjoin rqvar rqtype (qidx SL Q) (vq, vw)
+    = rq_unpair (wjoin qvar qtype Q (Urelab_fwd SL Q vq, fun q => vw (SL, q)), fun q => vw (SR, q)).
+  Proof.
+    apply funext; intros [t q]; destruct t; reflexivity.
+  Qed.
+
+  Lemma rUsplit_qidx_SL_ket (Q : qset) (vq : rqsub (qidx SL Q)) (vw : rqsub (rqneg (qidx SL Q))) :
+    oapp (rUsplit (qidx SL Q)) (tensorv (ket vq) (ket vw))
+    = oapp (oadj Urqpair)
+        (oapp (tensoro (Usplit Q) oid)
+           (tensorv (tensorv (oapp (Urelab SL Q) (ket vq)) (ket (fun q => vw (SL, q))))
+                    (ket (fun q => vw (SR, q))))).
+  Proof.
+    set (qL := Urelab_fwd SL Q vq).
+    set (qLc := fun q => vw (SL, q)).
+    set (qR := fun q => vw (SR, q)).
+    transitivity (ket (wjoin rqvar rqtype (qidx SL Q) (vq, vw))).
+    { rewrite tensorv_ket; apply Wsplit_ket. }
+    transitivity (ket (rq_unpair (wjoin qvar qtype Q (qL, qLc), qR))).
+    { f_equal; apply wjoin_qidx_SL. }
+    transitivity (oapp (oadj Urqpair) (ket (wjoin qvar qtype Q (qL, qLc), qR))).
+    { unfold Urqpair; rewrite Ubij_adj; symmetry; apply Ubij_ket. }
+    transitivity (oapp (oadj Urqpair) (tensorv (ket (wjoin qvar qtype Q (qL, qLc))) (ket qR))).
+    { f_equal; symmetry; apply tensorv_ket. }
+    transitivity (oapp (oadj Urqpair) (tensorv (oapp (Usplit Q) (ket (qL, qLc))) (ket qR))).
+    { f_equal; f_equal; symmetry; apply Wsplit_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (tensorv (oapp (Usplit Q) (tensorv (ket qL) (ket qLc))) (ket qR))).
+    { f_equal; f_equal; f_equal; symmetry; apply tensorv_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (tensorv (oapp (Usplit Q) (tensorv (ket qL) (ket qLc))) (oapp oid (ket qR)))).
+    { f_equal; f_equal; symmetry; apply oapp_oid. }
+    transitivity (oapp (oadj Urqpair)
+                    (oapp (tensoro (Usplit Q) oid) (tensorv (tensorv (ket qL) (ket qLc)) (ket qR)))).
+    { f_equal; symmetry; apply tensoro_app. }
+    f_equal; f_equal; f_equal; f_equal.
+    unfold qL; symmetry; apply Ubij_ket.
+  Qed.
+
   (** The side swap on [rqmem], as a [Ubij]. Composing it with [Urqpair] and
       composing [Urqpair] with the factor swap [Uswap] agree -- both send
       [rqmem]'s [(V1,V2)] pairing to [(V2,V1)] -- which is an index
