@@ -624,6 +624,36 @@ Module Type HILBERT_SUBSTRATE.
   Axiom tcp_ptrace_conj_tensorR : forall X Y Y' (B : op Y Y') (r : tcp (X * Y)),
       ocomp (oadj B) B = oid ->
       tcp_ptrace (tcp_conj (tensoro oid B) r) = tcp_ptrace r.
+
+  (** Swapping the two factors turns one partial trace into the other. Not
+      derivable from the four laws above: those relate a partial trace to
+      *the same* partial trace of an action on one factor, whereas this
+      exchanges *which* factor is traced out, which needs the reindexing
+      unitary's action on a general (non-product, non-pure) operator -- exactly
+      what the signature declines to expose beyond kets ([Ubij_ket]). Stated
+      with the swap given explicitly via [Ubij] rather than through a named
+      [Uswap] combinator, since [Uswap] is derived, not part of the
+      signature. *)
+  Axiom tcp_ptrace_pswap : forall X Y H1 H2 (r : tcp (X * Y)),
+      tcp_ptrace
+        (tcp_conj (@Ubij (X * Y) (Y * X)
+                     (fun p => (snd p, fst p)) (fun q => (snd q, fst q)) H1 H2)
+                  r)
+      = tcp_ptrace2 r.
+
+  (** Conjugating a *product* by the factor swap exchanges the factors. Not
+      derivable from [tcp_ptrace_pswap] (a partial trace forgets too much to
+      pin down the whole state) or from [tcp_conj_proj] plus [tcp_decompose]
+      (that route needs the swap's action on a general, non-ket, tensor
+      vector -- [tensorv v w] for non-basis [v], [w] -- which is exactly the
+      continuity the signature does not expose). Textbook nonetheless: this
+      is literally what "the factor swap" means. *)
+  Axiom tcp_conj_pswap : forall X Y H1 H2 (r : tcp X) (s : tcp Y),
+      tcp_conj (@Ubij (X * Y) (Y * X)
+                  (fun p => (snd p, fst p)) (fun q => (snd q, fst q)) H1 H2)
+               (tcp_tensor r s)
+      = tcp_tensor s r.
+
   Axiom tcp_tensor_proj : forall X Y (v : l2 X) (w : l2 Y),
       tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w).
   Axiom tcp_scale_tensor_l : forall X Y (a : R) (r : tcp X) (s : tcp Y),

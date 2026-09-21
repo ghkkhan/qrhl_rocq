@@ -81,10 +81,10 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
 | 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` `JointSample` | **done** |
-| 2 | `QrhlElim` (Lemma 50) and its equality form, `JointWhile` (Lemma 61) | **done** (ahead of their phase) |
-| 1d | the other 2 vertical-slice rules | in progress, see below |
+| 2 | `QrhlElim` (Lemma 50) and its equality form, `JointWhile` (Lemma 61), `Sym` (Lemma 44) | **done** (ahead of their phase) |
+| 1d | `QInit1`, `JointMeasureSimple` | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
-| 2 | `Sym` `Frame` `Equal` `QrhlElimEq`, `While1` | not started |
+| 2 | `Frame` `Equal` `QrhlElimEq`, `While1` | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
 | 4 | finite-dimensional model | not started |
 
@@ -245,21 +245,32 @@ same telescoping estimate as `sem_while_wf_trace` one level up. `While1` is the
 harder of the two: the paper gives it a termination side condition
 (Definition 22) and a locality condition, neither of which exists yet.
 
-### The register-coherence question — needs a decision
+`Sym` (Lemma 44) is proved, ahead of its phase and using `op_ext_ket`
+throughout. The predicate-level swap `predswap A` reads `A` at the memory with
+its classical halves exchanged (`Expr.v`'s existing `rswap`, whose `ev_local`
+obligation was already discharged for exactly this) and then applies the
+quantum side swap `Urqswap` to the resulting subspace, pointwise. The
+state-level witness `rcqs_swap` is the analogous conjugation. Two things make
+the projections line up: `rtcpL`/`rtcpR` exchange under `Urqswap`
+(`ocomp Urqpair Urqswap = ocomp Uswap Urqpair`, an `op_ext_ket` computation,
+composed with one new axiom that a factor swap exchanges a tensor's factors —
+not derivable from `op_ext_ket` alone, since it needs the swap's action on a
+general non-ket vector), and separability survives the same conjugation for
+the same algebraic reason. The one place `predswap` and `rcqs_swap` are not
+quite inverse (`Urqswap` composed with itself is provably `oid`, but the
+general fact `himg U(himg U S) = S` for a unitary `U` is not derived, only the
+inequality `himg U(himg U S) ≤ S` is, via the existing `himg_isometry_meet_oim`
+plus `oim Urqswap = htop`) turns out not to matter: `psat`'s obligation is an
+inequality, so the inequality alone suffices, in both directions the proof
+needs. Consulted a stronger model on whether to add `op_ext_ket` at all before
+starting any of this, since design decisions on the substrate are outside
+this project's usual reviewer's expertise; see `HANDOFF.md` §7c for that
+exchange.
 
-`QInit1` is the one Phase 1d rule with an architectural obstacle, and it is on
-the critical path to Phase 1's exit criterion. It needs the two decompositions
-of the relational memory — side split then register split, versus the
-relational register split — to be identified. One-sided lifts were *defined*
-through the side split precisely to avoid this, and that worked for every rule
-proved so far, but initialization *discards* a register, so it cannot be
-avoided.
+### `op_ext_ket`, and what it bought
 
-The shape of the fix is now clear and is cheaper than earlier notes suggested.
-All the unitaries involved are `Ubij`s, and `tensoro` of `Ubij`s sends kets to
-kets, so the required identity is an index-level computation — provided the
-signature can conclude operator equality from agreement on the computational
-basis:
+The signature now assumes operators are determined by their action on the
+computational basis:
 
 ```coq
 Axiom op_ext_ket : forall X Y (A B : op X Y),
@@ -267,11 +278,30 @@ Axiom op_ext_ket : forall X Y (A B : op X Y),
 ```
 
 That is the totality of an orthonormal basis: textbook, generic, and silent
-about qRHL, so it passes the hygiene rule as stated. What follows it is not
-cheap — the reassociation `Ubij` has dependent round-trip proofs over
-`fun w => if P w then wty w else unit` — but it keeps the trusted surface
-honest. The alternative is an abstract register primitive (Unruh's
-*Registers*, CoqQ's `qreg`), which is a larger redesign. See `HANDOFF.md` §7c.
+about qRHL, so it passes the hygiene rule as stated. It replaces the
+signature's old `op_ext` (extensionality over *all* vectors) rather than
+sitting alongside it: `op_ext_ket`'s hypothesis is strictly weaker (agreement
+on kets alone, versus agreement everywhere), so `op_ext` becomes a one-line
+corollary in `Theory.v`, proved under the same name so nothing downstream
+changed. Net effect on the trusted surface: zero new axioms, and a strict
+tightening, since only the one that resists derivation remains assumed. A
+`Sanity.v` canary (`canary_op_ext_ket_nondegenerate`) confirms it doesn't
+collapse operators that act differently on kets.
+
+What it buys: every unitary in the development (`Wsplit`, `Urqpair`, the
+register reassociations, the side swap `Urqswap`) is a `Ubij` or a `tensoro`
+of `Ubij`s, and those send kets to kets, so identities *between* them —
+`ocomp Urqpair Urqswap = ocomp Uswap Urqpair`, `ocomp Urqswap Urqswap = oid`,
+and so on — become index-level computations. That is what makes rule `Sym`
+provable (see below).
+
+It does *not*, by itself, make `QInit1` provable. `QInit1` needs a *different*
+coherence fact — identifying the side-split-then-register-split decomposition
+of the relational memory with the relational register split directly — which
+additionally needs the reassociation `Ubij`'s dependent round-trip proofs over
+`fun w => if P w then wty w else unit`. That is still outstanding; see
+`HANDOFF.md` §7d. The alternative to any of this is an abstract register
+primitive (Unruh's *Registers*, CoqQ's `qreg`), a larger redesign.
 
 ### Two smaller gaps in §4.4
 

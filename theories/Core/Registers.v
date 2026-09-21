@@ -407,6 +407,67 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Lemma Urqpair_ket (m : rqmem) : oapp Urqpair (ket m) = ket (rq_pair m).
   Proof. apply Ubij_ket. Qed.
 
+  (** The side swap on [rqmem], as a [Ubij]. Composing it with [Urqpair] and
+      composing [Urqpair] with the factor swap [Uswap] agree -- both send
+      [rqmem]'s [(V1,V2)] pairing to [(V2,V1)] -- which is an index
+      computation via [op_ext_ket] once both sides are unfolded to their
+      [ket] action. *)
+  Definition Urqswap : op rqmem rqmem :=
+    Ubij rqmem_swap rqmem_swap rqmem_swap_invol rqmem_swap_invol.
+
+  Lemma Urqswap_ket (m : rqmem) : oapp Urqswap (ket m) = ket (rqmem_swap m).
+  Proof. apply Ubij_ket. Qed.
+
+  Lemma Urqswap_unitary : ounitary Urqswap.
+  Proof. apply Ubij_ounitary. Qed.
+
+  Lemma Urqswap_adj : oadj Urqswap = Urqswap.
+  Proof. apply Ubij_adj. Qed.
+
+  Lemma Urqswap_Urqswap : ocomp Urqswap Urqswap = oid.
+  Proof.
+    apply op_ext_ket; intros m.
+    rewrite oapp_ocomp, !Urqswap_ket, rqmem_swap_invol, oapp_oid; reflexivity.
+  Qed.
+
+  (** [Urqswap] is onto: every ket [ket m] is [oapp Urqswap] of the ket at
+      the swapped memory, so its image contains a spanning set and hence is
+      everything. *)
+  Lemma oim_Urqswap : oim Urqswap = htop.
+  Proof.
+    apply hle_antisym; [ apply hle_htop |].
+    rewrite <- hspan_ket; apply hspan_le; intros v [m ->].
+    assert (Heq : ket m = oapp Urqswap (ket (rqmem_swap m))).
+    { rewrite Urqswap_ket, rqmem_swap_invol; reflexivity. }
+    rewrite Heq; apply hmem_oim.
+  Qed.
+
+  (** Applying [Urqswap] twice to the image of a subspace lands back inside
+      it -- the one direction [rule Sym]'s [psat] obligation needs. (The
+      other direction, that this is an equality, would need more than the
+      isometry-meet-image trick below supplies, and is not needed.) *)
+  Lemma himg_Urqswap_shrink (S : hspace rqmem) :
+    himg Urqswap (himg Urqswap S) <=h S.
+  Proof.
+    pose proof (himg_isometry_meet_oim Urqswap S
+                  (ounitary_isometry Urqswap Urqswap_unitary)) as H.
+    rewrite Urqswap_adj, oim_Urqswap, hmeet_htop in H; exact H.
+  Qed.
+
+  Lemma rq_pair_swap (m : rqmem) : rq_pair (rqmem_swap m) = pswap (rq_pair m).
+  Proof.
+    unfold rq_pair, pswap; cbn [fst snd]; f_equal;
+      apply funext; intros q; unfold qsel, rqmem_swap; reflexivity.
+  Qed.
+
+  Lemma Urqpair_Urqswap : ocomp Urqpair Urqswap = ocomp Uswap Urqpair.
+  Proof.
+    apply op_ext_ket; intros m.
+    rewrite !oapp_ocomp, Urqswap_ket, Urqpair_ket.
+    rewrite Urqpair_ket, Uswap_ket.
+    f_equal; apply rq_pair_swap.
+  Qed.
+
   (** [tr^{[V1]}_{V2}]: keep the left side. *)
   Definition rtcpL (r : tcp rqmem) : tcp qmem :=
     tcp_ptrace (tcp_conj Urqpair r).
@@ -442,6 +503,23 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Proof.
     unfold rtcpR; rewrite tcp_ptraceL_trace.
     apply tcp_trace_conj_isometry, (proj1 Urqpair_unitary).
+  Qed.
+
+  (** Swapping the two sides exchanges the two partial traces. *)
+  Lemma rtcpL_Urqswap (r : tcp rqmem) :
+    rtcpL (tcp_conj Urqswap r) = rtcpR r.
+  Proof.
+    unfold rtcpL, rtcpR, tcp_ptraceL.
+    rewrite <- tcp_conj_ocomp, Urqpair_Urqswap, tcp_conj_ocomp.
+    apply tcp_ptrace_Uswap.
+  Qed.
+
+  Lemma rtcpR_Urqswap (r : tcp rqmem) :
+    rtcpR (tcp_conj Urqswap r) = rtcpL r.
+  Proof.
+    unfold rtcpL, rtcpR, tcp_ptraceL.
+    rewrite <- tcp_conj_ocomp, Urqpair_Urqswap, tcp_conj_ocomp.
+    apply tcp_ptrace2_Uswap.
   Qed.
 
   (** *** Normality

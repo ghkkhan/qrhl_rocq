@@ -657,6 +657,13 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply hmem_hbot, oapp_vzero.
   Qed.
 
+  Lemma himg_oid {X} (S : hspace X) : himg oid S = S.
+  Proof.
+    apply hle_antisym.
+    - apply himg_le; intros v Hv; rewrite oapp_oid; exact Hv.
+    - intros v Hv; rewrite <- (oapp_oid _ v) at 1; apply hmem_himg, Hv.
+  Qed.
+
   (* ================================================================= *)
   (** ** Kernels and fixed subspaces
 
@@ -752,6 +759,40 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   Lemma Uswap_ket {A B : Type} (ab : A * B) :
     oapp Uswap (ket ab) = ket (pswap ab).
   Proof. apply Ubij_ket. Qed.
+
+  Lemma Uswap_unitary {A B : Type} : ounitary (@Uswap A B).
+  Proof. apply Ubij_ounitary. Qed.
+
+  (** Swapping twice is the identity -- an index computation via [Ubij_ocomp]
+      and [Ubij_oid], [pswap]'s own involution supplying the two hypotheses
+      each needs. *)
+  Lemma Uswap_Uswap {A B : Type} : ocomp (@Uswap B A) (@Uswap A B) = oid.
+  Proof.
+    apply op_ext_ket; intros [a b].
+    rewrite oapp_ocomp, !Uswap_ket, oapp_oid; reflexivity.
+  Qed.
+
+  (** Swapping the two factors turns each partial trace into the other -- the
+      named-[Uswap] form of the signature's [tcp_ptrace_pswap]. The second
+      direction is not a second axiom: it follows from the first applied at
+      the swapped type, plus [Uswap_Uswap]. *)
+  Lemma tcp_ptrace_Uswap {X Y} (r : tcp (X * Y)) :
+    tcp_ptrace (tcp_conj Uswap r) = tcp_ptrace2 r.
+  Proof. unfold Uswap; apply tcp_ptrace_pswap. Qed.
+
+  Lemma tcp_ptrace2_Uswap {X Y} (r : tcp (X * Y)) :
+    tcp_ptrace2 (tcp_conj Uswap r) = tcp_ptrace r.
+  Proof.
+    rewrite <- (tcp_ptrace_Uswap (tcp_conj Uswap r)).
+    rewrite <- tcp_conj_ocomp, Uswap_Uswap, tcp_conj_oid.
+    reflexivity.
+  Qed.
+
+  (** The named-[Uswap] form of [tcp_conj_pswap]: conjugating a product by
+      the factor swap exchanges the factors. *)
+  Lemma tcp_conj_Uswap {X Y} (r : tcp X) (s : tcp Y) :
+    tcp_conj Uswap (tcp_tensor r s) = tcp_tensor s r.
+  Proof. unfold Uswap; apply tcp_conj_pswap. Qed.
 
   (** Trace out the *first* factor, keeping the second: the signature's
       [tcp_ptrace2], under the name the rest of the development uses. *)

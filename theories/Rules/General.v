@@ -482,24 +482,58 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ================================================================= *)
+  (** ** Sym  [Figure 1, Lemma 44, p. 46]
+
+<<
+         {A} c ~ d {B}
+        ----------------------------
+         {predswap A} d ~ c {predswap B}
+>>
+
+      "Rule Sym allows us to interchange the two programs [c], [d] in a qRHL
+      judgment, at the cost of swapping [1] and [2] in the pre- and
+      postcondition." Halves the work for every "2" variant of a one-sided
+      rule (Assign2, Sample2, QApply2, Measure2, If2, ...): each can be
+      derived from its "1" counterpart by [Sym] instead of being proved
+      directly, though none of that derivation is done yet -- the existing
+      "2" rules (e.g. [QApply2_pre] in [Rules/Quantum.v]) are still proved
+      by hand.
+
+      The witness for [d ~ c] is [rcqs_swap] applied to the witness [H]
+      supplies for [c ~ d]: given [r] satisfying [predswap A], [rcqs_swap r]
+      satisfies [A] ([rcqs_swap_psat_from_predswap]), so [H] applies to it;
+      its witness [s] satisfies [B], so [rcqs_swap s] satisfies [predswap B]
+      ([rcqs_swap_psat_to_predswap]) and is the witness returned. The two
+      projections exchange along with the two programs
+      ([rcqs_projL_swap], [rcqs_projR_swap]), which is exactly what lines the
+      swapped witness's projections up with [d] on the left and [c] on the
+      right. *)
+
+  Theorem rule_Sym (A B : pred) (c d : prog) :
+    qrhl A c d B -> qrhl (predswap A) d c (predswap B).
+  Proof.
+    intros H r Hwf Hsep Hsat.
+    destruct (H (rcqs_swap r)
+                (rcqs_swap_wf r Hwf) (rcqs_swap_sep r Hsep)
+                (rcqs_swap_psat_from_predswap r A Hsat))
+      as [s [Hwfs [Hseps [Hsats [HL HR]]]]].
+    exists (rcqs_swap s); repeat split.
+    - apply rcqs_swap_wf; exact Hwfs.
+    - apply rcqs_swap_sep; exact Hseps.
+    - apply rcqs_swap_psat_to_predswap; exact Hsats.
+    - rewrite rcqs_projL_swap, HR, rcqs_projR_swap; reflexivity.
+    - rewrite rcqs_projR_swap, HL, rcqs_projL_swap; reflexivity.
+  Qed.
+
+  (* ================================================================= *)
   (** ** The rest of Figure 1
 
-      Every remaining general rule needs something this file does not have
-      yet:
+      What remains needs something this file does not have yet:
 
-      - [Case] (Lemma 48) splits the initial state according to the value of a
-        classical expression and reassembles the witnesses, so it needs the
-        converse of Lemma 36 (or, equivalently, the same sum bookkeeping).
-      - [Sym] (Lemma 44) needs the action of the side swap on states and
-        predicates. The pieces are present ([rcmem_swap], [rqmem_swap],
-        [rswap]); what is missing is that swapping commutes with the two
-        partial traces.
       - [Equal] (Lemma 49) and [Frame] (Lemma 45) need locality: Definition 10
         for programs, which needs an abstract superoperator notion in the
         substrate, and Definition 18 for predicates, which is in
         [Predicate.v] but has no lemmas yet.
-      - [QrhlElim] / [QrhlElimEq] (Lemmas 50, 51) connect judgments to
-        probabilities and need [Pr] to interact with the partial traces.
       - [Trans] / [TransSimple] (Lemmas 52, 53) are the most technical rules in
         the paper and are Phase 3. *)
 

@@ -154,6 +154,25 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ================================================================= *)
+  (** ** Swapping a predicate
+
+      Rule Sym needs, for a predicate [A], the predicate obtained by
+      exchanging the two sides: [{A} c ~ d {B}] gives
+      [{predswap A} d ~ c {predswap B}]. Concretely, [predswap A] reads [A] at
+      the memory with its two classical halves exchanged -- that half is
+      exactly [Expr.v]'s [rswap], which already discharges the [ev_local]
+      obligation for the swapped free-variable set -- and then applies the
+      quantum side swap [Urqswap] to the resulting subspace, pointwise via
+      [gmap]. (Named [predswap], not [pswap]: [Theory.v]'s [pswap] is the
+      unrelated *vector*-level pair swap that [Uswap] is built from.) *)
+
+  Definition predswap (A : pred) : pred := gmap (himg Urqswap) (rswap A).
+
+  Lemma ev_predswap (A : pred) (rm : rcmem) :
+    ev (predswap A) rm = himg Urqswap (ev A (rcmem_swap rm)).
+  Proof. reflexivity. Qed.
+
+  (* ================================================================= *)
   (** ** Operations on predicates (section 4.2)
 
       "First, any operation that can be performed on subspaces is meaningful on

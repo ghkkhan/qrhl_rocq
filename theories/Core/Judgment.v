@@ -75,11 +75,106 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Lemma rsep_zero : rsep tcp_zero.
   Proof. unfold rsep; rewrite tcp_conj_zero; apply tcp_sep_zero. Qed.
 
+  (** Conjugating by the factor swap preserves separability: it just
+      exchanges the two families witnessing it. Needed by rule Sym, whose
+      witness conjugates by [Urqswap]. *)
+  Lemma tcp_sep_Uswap {X Y} (r : tcp (X * Y)) :
+    tcp_sep r -> tcp_sep (tcp_conj Uswap r).
+  Proof.
+    intros [J [f [g [Hs Heq]]]].
+    exists J, g, f; split.
+    - assert (Heq2 : (fun j => tcp_tensor (g j) (f j))
+                      = (fun j => tcp_conj Uswap (tcp_tensor (f j) (g j))))
+        by (apply funext; intros j; symmetry; apply tcp_conj_Uswap).
+      rewrite Heq2.
+      apply (tcp_summable_conj Uswap _ (proj1 Uswap_unitary) Hs).
+    - rewrite Heq, (tcp_conj_sum _ _ _ _ _ Hs).
+      f_equal; apply funext; intros j; apply tcp_conj_Uswap.
+  Qed.
+
+  (** [rsep]'s own form: swapping the two sides preserves separability. *)
+  Lemma rsep_Urqswap (r : tcp rqmem) : rsep r -> rsep (tcp_conj Urqswap r).
+  Proof.
+    intros Hr; unfold rsep.
+    rewrite <- tcp_conj_ocomp, Urqpair_Urqswap, tcp_conj_ocomp.
+    apply tcp_sep_Uswap, Hr.
+  Qed.
+
+
   (** A cq-state is separable when each of its blocks is. The classical part of
       a cq-operator is already block-diagonal across the two sides, so nothing
       more is needed. *)
   Definition rcqs_sep (r : rcqs) : Prop := forall rm, rsep (r rm).
 
+
+  (* ================================================================= *)
+  (** ** Swapping a relational state
+
+      Rule Sym's witness: read the given state at the memory with its
+      classical halves exchanged, then apply the quantum side swap. This is
+      the state-level counterpart of [predswap] in [Predicate.v], and
+      [rcqs_swap_wf] / [rcqs_swap_sep] / [rcqs_swap_psat] below are exactly
+      what makes [predswap]'s choices line up with it. *)
+
+  Definition rcqs_swap (r : rcqs) : rcqs :=
+    fun rm => tcp_conj Urqswap (r (rcmem_swap rm)).
+
+  Lemma rcqs_swap_wf (r : rcqs) : rcqs_wf r -> rcqs_wf (rcqs_swap r).
+  Proof.
+    intros Hr; unfold rcqs_wf, rcqs_swap.
+    apply (tcp_summable_conj Urqswap _ (proj1 Urqswap_unitary)).
+    apply (proj1 (tcp_sum_bij rqmem rcmem rcmem rcmem_swap rcmem_swap r
+                    rcmem_swap_invol rcmem_swap_invol Hr)).
+  Qed.
+
+  Lemma rcqs_swap_sep (r : rcqs) : rcqs_sep r -> rcqs_sep (rcqs_swap r).
+  Proof. intros Hr rm; unfold rcqs_swap; apply rsep_Urqswap, Hr. Qed.
+
+  (** The [psat] step in both directions rule Sym needs: reading the state
+      swap's support needs only [himg]'s monotonicity, in the direction that
+      matches the hypothesis, and [himg_Urqswap_shrink] in the other. *)
+
+  Lemma rcqs_swap_psat_from_predswap (r : rcqs) (A : pred) :
+    psat r (predswap A) -> psat (rcqs_swap r) A.
+  Proof.
+    intros Hsat rm; unfold rcqs_swap.
+    rewrite tcp_supp_conj.
+    change (hspan (fun w => exists v, hmem v (tcp_supp (r (rcmem_swap rm)))
+                                      /\ w = oapp Urqswap v))
+      with (himg Urqswap (tcp_supp (r (rcmem_swap rm)))).
+    eapply hle_trans; [ apply himg_mono, (Hsat (rcmem_swap rm)) |].
+    rewrite ev_predswap, rcmem_swap_invol; apply himg_Urqswap_shrink.
+  Qed.
+
+  Lemma rcqs_swap_psat_to_predswap (r : rcqs) (A : pred) :
+    psat r A -> psat (rcqs_swap r) (predswap A).
+  Proof.
+    intros Hsat rm; unfold rcqs_swap.
+    rewrite tcp_supp_conj.
+    change (hspan (fun w => exists v, hmem v (tcp_supp (r (rcmem_swap rm)))
+                                      /\ w = oapp Urqswap v))
+      with (himg Urqswap (tcp_supp (r (rcmem_swap rm)))).
+    rewrite ev_predswap.
+    apply himg_mono, (Hsat (rcmem_swap rm)).
+  Qed.
+
+  (** Swapping the state exchanges the two projections. *)
+
+  Lemma rcqs_projL_swap (r : rcqs) : rcqs_projL (rcqs_swap r) = rcqs_projR r.
+  Proof.
+    apply funext; intros m1; unfold rcqs_projL, rcqs_projR, rcqs_swap.
+    f_equal; apply funext; intros m2.
+    change (rcmem_swap (m1, m2)) with (m2, m1).
+    apply rtcpL_Urqswap.
+  Qed.
+
+  Lemma rcqs_projR_swap (r : rcqs) : rcqs_projR (rcqs_swap r) = rcqs_projL r.
+  Proof.
+    apply funext; intros m2; unfold rcqs_projL, rcqs_projR, rcqs_swap.
+    f_equal; apply funext; intros m1.
+    change (rcmem_swap (m1, m2)) with (m2, m1).
+    apply rtcpR_Urqswap.
+  Qed.
   (** Separability is closed under binary sums: index the two decompositions
       jointly over [bool], flatten with [tcp_sum_sigma], and use that a sum
       over [bool] is a binary addition. *)

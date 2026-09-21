@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `3a869ab`. Sixteen of the paper's rules are proved,
+Last updated at commit (pending). Seventeen of the paper's rules are proved,
 with no admits and no axioms outside the substrate signature.
 
 ---
@@ -57,20 +57,26 @@ Substrate/Ambient.v     classical HOL (the logic the paper's proofs live in)
 Substrate/Cnum.v        C := R * R  (Rocq's stdlib has no complex numbers)
 Substrate/Sums.v        unordered sums: rearrangement, Tonelli, additivity
 Substrate/Interface.v   Module Type HILBERT_SUBSTRATE   <-- trusted surface
-Substrate/Theory.v      derived: lattice, operators, tensor, division, kernels
+Substrate/Theory.v      derived: lattice, operators, tensor, division, kernels,
+                        Ubij_oid / Ubij_ocomp / Uswap_Uswap / tcp_conj_Uswap
 Substrate/Sanity.v      degeneracy canaries for the signature
-Core/Vars.v             cvar/qvar, cmem/qmem, side, rcmem/rqmem, updates
-Core/Expr.v             generic expression record; expr and rexpr instances
-Core/Registers.v        the memory split, U_vars, A»Q, one-sided lifts
+Core/Vars.v             cvar/qvar, cmem/qmem, side, rcmem/rqmem, updates,
+                        the right-sided/cross-side rcupd mirrors
+Core/Expr.v             generic expression record; expr and rexpr instances;
+                        rswap (the classical half of a predicate swap)
+Core/Registers.v        the memory split, U_vars, A»Q, one-sided lifts,
+                        Urqswap and the coherence/shrink lemmas for it
 Core/Syntax.v           prog inductive, wt, fv, loopfree (now unused)
 Core/Semantics.v        [[c]], Pr, the While section (telescoping bound),
                         denote_wf_trace / denote_add / denote_sum, cqs_fam
-Core/Predicate.v        Def 13/14/16/18/20/23, Lem 15/17/24/25
+Core/Predicate.v        Def 13/14/16/18/20/23, Lem 15/17/24/25, predswap
 Core/QEq.v              Def 27 quantum equality, Lem 31
-Core/Judgment.v         Definition 35, Lemma 36 forward, rbeta,
-                        rcqs_sum / rcqs_fam and the projection normality laws
-Rules/General.v         Skip, Conseq, Seq, Case, QrhlElim (+ equality form)
-Rules/Classical.v       Assign1, Sample1, If1, JointIf, JointWhile
+Core/Judgment.v         Definition 35, Lemma 36 forward, rbeta / rbeta2,
+                        rcqs_sum / rcqs_fam and the projection normality laws,
+                        rcqs_swap and its psat/projection laws
+Rules/General.v         Skip, Conseq, Seq, Case, QrhlElim (+ equality form),
+                        Sym
+Rules/Classical.v       Assign1, Sample1, If1, JointIf, JointWhile, JointSample
 Rules/Quantum.v         QApply1, Measure1
 ```
 
@@ -189,10 +195,15 @@ partition bound), `tsum_pairs_le_iter` / `tsum_iter_le_pairs` /
 **Substrate/Theory.v** — the complete-lattice structure on subspaces (meets,
 joins, span, orthocomplement, De Morgan); operator algebra including
 **`oadj_invol`, `oadj_ocomp`, `oadj_oid` derived, not assumed**, from
-`inner_oadj` plus nondegeneracy; kernels and fixed subspaces as *preimages*
-(so `hfix` needs no new axiom); images with the preimage adjunction;
-`himg_isometry_meet_oim`, which is what makes `QApply1`'s precondition work;
-`tcp_sum_pair`, `tcp_sum_swap`.
+`inner_oadj` plus nondegeneracy; **`op_ext` is now also derived**, as a
+one-line corollary of `op_ext_ket` (see §6); kernels and fixed subspaces as
+*preimages* (so `hfix` needs no new axiom); images with the preimage
+adjunction; `himg_isometry_meet_oim`, which is what makes `QApply1`'s
+precondition work, and `himg_oid`; `tcp_sum_pair`, `tcp_sum_swap`; `Ubij_oid`
+and `Ubij_ocomp`, the two lemmas that make every syntactic identity between
+the development's reindexing unitaries an index-level computation; `Uswap`'s
+own `Uswap_Uswap` (self-inverse) and `tcp_conj_Uswap` (conjugating a tensor
+product by the factor swap exchanges the factors).
 
 **Core** — variables and memories; the generic expression record; the register
 split with `Wsplit`, `Wsplit2` (disjoint union, needed for the three-way split
@@ -220,7 +231,7 @@ Judgment.v additionally has the relational counterpart — `rcqs_sum` /
 `cqs_trace ∘ rcqs_projL = rcqs_trace`, and normality of both projections —
 plus `tcp_sep_sum` and the one-sided reindexing `rbeta`.
 
-**Rules** — thirteen of the paper's, with the lemma number each is proved
+**Rules** — seventeen of the paper's, with the lemma number each is proved
 from:
 
 | rule | lemma | notes |
@@ -237,6 +248,7 @@ from:
 | `JointWhile` | 61 | ahead of its phase; no termination condition needed |
 | `Measure1` | 62 | |
 | `JointSample` | 57 | both projections need a marginal collapse, not just one -- see §7b |
+| `Sym` | 44 | ahead of its phase; needed `op_ext_ket` -- see §7c |
 | `QApply1` | 65 | |
 
 `grep -rhoE "Theorem rule_[A-Za-z_0-9]+" theories/Rules/ | sort -u` is the
@@ -257,8 +269,15 @@ inventory in `AXIOMS.md`, which is where the statements live.
 | Preimages of subspaces | 1 | 1 |
 | Tensor product | 4 | 13 |
 | Reindexing | 1 | 3 |
-| Positive trace-class operators | 14 | 68 |
-| **total** | **44** | **125** |
+| Positive trace-class operators | 14 | 70 |
+| **total** | **44** | **127** |
+
+Two additions since the last count, both used by rule `Sym`: **`op_ext_ket`**
+(replacing `op_ext`, net zero axioms -- see §7c) and, at +2, **`tcp_ptrace_pswap`**
+/ **`tcp_conj_pswap`** (the factor-swap versions of the existing
+partial-trace/tensor laws -- textbook, but not derivable from `op_ext_ket`
+alone, since the swap's action on a general non-ket vector is exactly the
+continuity gap the signature declines to expose).
 
 Discipline when adding one: it must be a statement you could cite a textbook
 for; it must be *used* by a proof you are writing now (never speculatively);
@@ -266,9 +285,10 @@ and it must not mention qRHL vocabulary. `make axioms` regenerates the
 inventory; `AXIOMS.md` names, for every *absent* axiom, the first proof that
 will need it.
 
-`Sanity.v` derives four concrete *inequalities* from the signature (the lattice
+`Sanity.v` derives five concrete *inequalities* from the signature (the lattice
 has ≥2 elements, distinct kets span distinct lines, `⊥` is not the identity,
-the tensor does not collapse). This catches a degenerate or contradictory
+the tensor does not collapse, and `op_ext_ket` does not collapse operators
+that act differently on kets). This catches a degenerate or contradictory
 signature cheaply. It is **not** a consistency proof — only Phase 4's model
 discharges that risk.
 
@@ -334,44 +354,89 @@ first (swap `SL↔SR`, `x↔y`, `e1↔e2`, `rtcpL↔rtcpR`, `marginal1↔margina
 compiled on the first try once the first one worked, which is worth knowing if
 this pattern recurs (it will, for `JointMeasureSimple`).
 
-### 7c. `op_ext_ket` — one axiom that unblocks several things at once
+### 7c. `op_ext_ket` and `Sym` — DONE
 
-**This is the item to decide before doing.** It is now clear that three
-separate outstanding pieces all reduce to the same missing principle, so it is
-worth treating as its own decision rather than as part of any one of them.
+Added `op_ext_ket`:
 
 ```coq
 Axiom op_ext_ket : forall X Y (A B : op X Y),
     (forall x : X, oapp A (ket x) = oapp B (ket x)) -> A = B.
 ```
 
-That is the totality of an orthonormal basis: textbook, generic in `X` and
-`Y`, and mentioning nothing about qRHL, so it passes the hygiene rule of §1 as
-stated. The signature deliberately declines to expose the continuity that
-would let it be *derived* — see the comment on `Ubij_unitary` — which is
-exactly why it has to be assumed. Note what it buys: every unitary in the
-development (`Wsplit`, `Urqpair`, the reassociations, the side swap) is a
-`Ubij` or a `tensoro` of `Ubij`s, and those send kets to kets, so any identity
-between composites of them becomes an index-level computation.
+The user asked me to consult a stronger model on this decision, having no
+view themselves on substrate design. That consultation's recommendation,
+followed here: add it, because the signature already contains `Ubij_unitary`
+— the *same* assumption family (determination of a bounded operator by its
+action on the computational basis) — with a comment explaining it is assumed
+rather than derived because deriving it needs continuity the signature won't
+expose. `op_ext_ket` makes that same commitment explicit rather than opening
+a new category of assumption.
 
-What it unblocks:
+It turned out to let the signature's old `op_ext` (extensionality over *all*
+vectors) become a one-line corollary: `op_ext_ket`'s hypothesis (agreement on
+kets) is strictly weaker than `op_ext`'s (agreement everywhere), so anything
+satisfying the latter satisfies the former. Net change to the trusted
+surface from that swap alone: **zero axioms**. Added a `Sanity.v` canary
+(`canary_op_ext_ket_nondegenerate`) since it's the first axiom quantifying
+over *all* operators.
 
-- **Register coherence**, and with it `QInit1` (§7d), Lemma 32 and the
-  locality that `Frame`/`Equal` need.
-- **`Sym`** (§7e).
+Then proved, using it: `Ubij_oid` (the identity reindexing is `oid`) and
+`Ubij_ocomp` (composing two `Ubij`s along composable maps is the `Ubij` of the
+composite) in `Theory.v` — every syntactic identity between the development's
+reindexing unitaries reduces to this pattern — and rule **`Sym`** (Lem 44).
+`{A} c ~ d {B}` gives `{predswap A} d ~ c {predswap B}`, where:
 
-**Recommendation: add it.** The alternative for register coherence — an
-abstract register primitive in the style of Unruh's *Registers* or CoqQ's
-`qreg` — is a larger redesign, and the alternative for `Sym` is an ad-hoc
-axiom that *would* move the hygiene line. But confirm before starting, since
-it is the first addition to the trusted surface that is a general principle
-rather than a specific fact.
+- **`predswap`** (`Predicate.v`) is `gmap (himg Urqswap) (rswap A)` — `rswap`
+  (already in `Expr.v`, from before this stretch of work) swaps the classical
+  memory and already discharges the `ev_local` obligation for the swapped
+  free-variable set; `gmap (himg Urqswap)` then applies the quantum side swap
+  pointwise. **This answers the open question** the previous version of this
+  section flagged ("how to swap a predicate") — it was already half-answered
+  by `rswap`, which nobody had connected to `pred` yet.
+- **`Urqswap`** (`Registers.v`) is `Ubij rqmem_swap rqmem_swap ...`. The key
+  identity `ocomp Urqpair Urqswap = ocomp Uswap Urqpair` is an `op_ext_ket`
+  computation (`rq_pair (rqmem_swap m) = pswap (rq_pair m)`, pure `qsel`
+  algebra). From it: `rtcpL (tcp_conj Urqswap r) = rtcpR r` and its mirror
+  (`rtcpL_Urqswap`, `rtcpR_Urqswap`), and (composed with `Urqpair_Urqswap`
+  again) that conjugating by `Urqswap` preserves separability
+  (`rsep_Urqswap`) — **using one new axiom**, `tcp_conj_pswap`: conjugating a
+  *product* by the factor swap exchanges the factors
+  (`tcp_conj Uswap (tcp_tensor r s) = tcp_tensor s r`). This is **not**
+  derivable from `op_ext_ket` alone — same reason `tcp_ptrace_pswap` (added
+  for the `rtcpL`/`rtcpR` exchange, also new) wasn't: both need the swap's
+  action on a *general* tensor vector, not just a ket, which the signature's
+  continuity gap puts out of reach. Textbook nonetheless.
+- **`rcqs_swap r := fun rm => tcp_conj Urqswap (r (rcmem_swap rm))`**
+  (`Judgment.v`) is the witness-level swap. Its `psat` law needed only *one*
+  direction of "swapping twice is the identity" —
+  `himg_Urqswap_shrink : himg Urqswap (himg Urqswap S) ≤h S` — proved via the
+  existing `himg_isometry_meet_oim` plus `oim Urqswap = htop` (`Urqswap` is
+  onto: every ket is `oapp Urqswap` of the ket at the swapped memory) plus
+  self-adjointness. The *equality* `himg U (himg U S) = S` for a unitary `U`
+  is **not** derived (the reverse inequality direction of
+  `himg_isometry_meet_oim`-style reasoning isn't available), and turned out
+  not to be needed: `psat`'s obligation is an inequality, in both directions
+  the proof uses.
 
-### 7d. `QInit1`, and register coherence
+`rule_Sym` itself: given `r` satisfying `predswap A`, `rcqs_swap r` satisfies
+`A` (`rcqs_swap_psat_from_predswap`, using the shrink lemma), so the
+hypothesis applies to it; its witness `s` satisfies `B`, so `rcqs_swap s`
+satisfies `predswap B` (`rcqs_swap_psat_to_predswap`, no shrink needed — just
+monotonicity) and is returned as the witness. The two projections exchange
+along with the two programs (`rcqs_projL_swap`, `rcqs_projR_swap`), which is
+what lines the swapped witness up with `d` on the left and `c` on the right.
 
-`QInit1` is on the critical path to Phase 1's exit criterion (the EPR examples
-need it), and it is blocked on relating two decompositions of the relational
-memory:
+No admits, no axioms beyond the two named above (net +2: `tcp_ptrace_pswap`,
+`tcp_conj_pswap`; `op_ext_ket` replacing `op_ext` is net 0). 44 parameters,
+127 axioms.
+
+### 7d. `QInit1`, and register coherence — STILL OUTSTANDING
+
+`op_ext_ket` did **not** make this cheap, only possible in principle; it is
+still the largest remaining architectural piece in Phase 1d, and is on the
+critical path to Phase 1's exit criterion (the EPR examples need it).
+
+It is blocked on relating two decompositions of the relational memory:
 
 - the side split `rqmem ≅ qmem ⊗ qmem` (via `Urqpair`), followed by the
   register split `qmem ≅ ℓ²[Q] ⊗ ℓ²[Qᶜ]` (via `Wsplit`), against
@@ -381,50 +446,19 @@ memory:
 Defining one-sided lifts through `Urqpair` sidestepped this for every rule
 proved so far, but `QInit1` cannot sidestep it: the operation *discards* a
 register, so both its left projection and its separability need the two
-pictures identified.
-
-With `op_ext_ket` the coherence theorem is an index-level computation. What is
-*not* cheap afterwards: the reassociation unitary has to be built as a `Ubij`
-between `rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and `(qsub P × qsub Pᶜ) × qmem`,
-and its two round-trip proofs are dependent function equalities over
-`fun w => if P w then wty w else unit`. Expect the most painful Rocq in the
+pictures identified. This is a genuinely different, harder coherence problem
+than the one `Sym` needed (`Urqswap` alone, no register split involved): the
+reassociation unitary has to be built as a `Ubij` between
+`rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and `(qsub P × qsub Pᶜ) × qmem`, and its
+two round-trip proofs are dependent function equalities over
+`fun w => if P w then wty w else unit` — matching the `bmerge`/`bpickl`/`bpickr`
+pattern §4 already flags as the place dependent typing bites hardest, now one
+level of nesting deeper. `op_ext_ket` makes the *identity itself* an
+index-level computation once the reassociation `Ubij` exists; building that
+`Ubij` is the remaining work, and is likely the most painful Rocq in the
 development.
 
-### 7e. `Sym` (Lem 44)
-
-Scoped but not started. `{A} c ∼ d {B}` gives `{swap A} d ∼ c {swap B}`, which
-would halve the work for every "2" variant (`Assign2`, `Sample2`, `QApply2`,
-`Measure2`, `If2`, …) — currently those have to be proved directly, as
-`QApply2_pre` in `Rules/Quantum.v` hints.
-
-The state-level pieces exist: `swap`, `rcmem_swap`, `rqmem_swap` and their
-involution lemmas are in `Core/Vars.v`. What is missing is three things.
-
-1. `Urqswap := Ubij rqmem_swap rqmem_swap _ _ : op rqmem rqmem` — trivial to
-   define, not yet defined.
-2. That swapping exchanges the two partial traces:
-   `rtcpL (tcp_conj Urqswap ρ) = rtcpR ρ`. This factors as
-   `ocomp Urqpair Urqswap = ocomp oswap Urqpair` (a ket identity, so
-   `op_ext_ket`), followed by `tcp_ptrace ∘ tcp_conj oswap = tcp_ptrace2`.
-   The second is **not** derivable — §8 records why — so it needs one axiom,
-   stated without a new parameter as
-   ```coq
-   Axiom tcp_ptrace_Ubij_swap : forall X Y H1 H2 (r : tcp (X * Y)),
-     tcp_ptrace (tcp_conj (@Ubij (X * Y) (Y * X)
-                            (fun p => (snd p, fst p))
-                            (fun q => (snd q, fst q)) H1 H2) r)
-     = tcp_ptrace2 r.
-   ```
-   The mirror law then follows, given `op_ext_ket`, from `oswap ∘ oswap = oid`.
-3. **The open question:** how to swap a *predicate*. A `pred` is a
-   `gexpr rcvar rcmem rctype rcget (hspace rqmem)`, a record carrying `ev`, an
-   over-approximate free-variable set `efv`, and a locality proof relating
-   them. Precomposing `ev` with `rcmem_swap` and postcomposing with
-   `himg Urqswap` is easy; producing the `ev_local` obligation for the swapped
-   free-variable set `fun v => efv A (swap (fst v), snd v)` is the part to
-   think about. Settle this before writing any of `Sym`.
-
-### 7f. `JointMeasureSimple` (Lem 64)
+### 7e. `JointMeasureSimple` (Lem 64)
 
 `Measure1`'s pattern applied on both sides at once, plus the quantum equality
 `Q′₁ ≡quant Q′₂` in the precondition. Notably it does *not* require the
@@ -439,23 +473,23 @@ pair of independently-updated classical variables), but the Fubini-regrouping
 technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 `Y * (cmem * X)`) should port directly.
 
-### 7g. §4.4's two remaining lemmas
+### 7f. §4.4's two remaining lemmas
 
 - **Lemma 29 / Corollary 30** needs the Schmidt decomposition (paper Lemma 7)
   as a new axiom. The *converse* direction — the one the examples use, to
   *establish* a quantum equality — is six lines and needs only that `U₁`, `U₂`
   are isometries. Do that first.
-- **Lemma 32** is the register-coherence statement of 7d; it falls out of the
+- **Lemma 32** is the register-coherence statement of §7d; it falls out of the
   same work.
 
-### 7h. Then Phase 1e onward
+### 7g. Then Phase 1e onward
 
-Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on 7d),
-Phase 2's remaining structural rules (`Sym`, `Frame`, `Equal`, `QrhlElimEq`)
-and `While1` (`JointWhile` is done; `While1` is the harder one, needing
-Definition 22's totality and a locality condition), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and Phase 4's
-finite-dimensional model — which is the only thing that turns "sound relative
-to a signature" into "sound".
+Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on §7d),
+Phase 2's remaining structural rules (`Frame`, `Equal`, `QrhlElimEq`) and
+`While1` (`JointWhile` and `Sym` are done; `While1` needs Definition 22's
+totality and a locality condition), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA,
+and Phase 4's finite-dimensional model — which is the only thing that turns
+"sound relative to a signature" into "sound".
 
 ---
 
@@ -505,13 +539,27 @@ Recorded so they are not re-derived.
 - **The other partial trace is not derivable from a tensor swap.** Going
   `tcp_ptrace ∘ tcp_conj Uswap` would need the swap's action on a general,
   non-product, non-pure operator, which the signature cannot compute. Hence
-  `tcp_ptrace2` is a primitive.
+  `tcp_ptrace2` is a primitive, *and* (as of `Sym`) the swap-exchange fact
+  needed one new axiom, `tcp_ptrace_pswap`, rather than being derivable.
 - **Register associativity looked like a fork requiring a redesign; it was
   not.** Defining one-sided lifts through the side split sidesteps it entirely
-  for the rules. It is still needed for Lemma 32 alone.
+  for the rules. It is still needed for `QInit1` and Lemma 32 — and, unlike
+  `Sym`'s coherence problem, `op_ext_ket` only makes that one *possible*, not
+  cheap; see §7d.
 - **Fubini for unordered nonnegative sums is no longer a substrate concern** —
   it is proved in `Sums.v` (`tsum_tonelli`, `tsum_partition_le`). Earlier notes
   listing it as a needed axiom are obsolete.
+- **`himg U (himg U S) = S` for a unitary `U` is not derivable, only one
+  inequality direction is** (`himg_isometry_meet_oim` plus `oim U = htop` plus
+  self-adjointness, giving `himg U (himg U S) ≤h S`). This did not block
+  `Sym`, because `psat`'s obligation is an inequality in the first place — but
+  it means "swapping a predicate twice gives back the original predicate" is
+  *not* a lemma in this development, only "twice-swapped state satisfies the
+  once-swapped predicate" is (in both directions, which is all `Sym` needs).
+  If a later proof genuinely needs the equality, it will need a new axiom for
+  it (the reverse `himg` inclusion for a unitary is exactly the kind of fact
+  the `himg_ocomp` gap in `Theory.v` also lacks — `himg_ocomp_le` is one
+  direction only).
 
 ---
 
@@ -521,6 +569,7 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
+| (pending) | `op_ext_ket` (replacing `op_ext`); `Sym` (Lem 44); `Urqswap`, `predswap`, `rcqs_swap`; two new axioms (`tcp_ptrace_pswap`, `tcp_conj_pswap`) |
 | `3a869ab` | `JointSample` (Lem 57); `Core/Vars.v` right/cross-side `rcupd` mirrors; `Core/Judgment.v` `rbeta2`; `Substrate/Sums.v` marginals |
 | `8563c58` | `JointWhile` (Lem 61) |
 | `f343d18` | the three `denote` inductions now cover loops; `loopfree` retired |
