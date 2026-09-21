@@ -968,6 +968,38 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     apply tcp_scale_1.
   Qed.
 
+  (** The converse of [tcp_conj_Urqpair_rprod]: a pure product's projection
+      read back from the tensor side. Needed by Lemma 36's converse to move
+      the per-factor normalization ([tcp_proj_decompose_unit]) across
+      [rprod]. *)
+  Lemma rprod_proj (v w : l2 qmem) :
+    tcp_proj (rprod v w) = tcp_conj (oadj Urqpair) (tcp_tensor (tcp_proj v) (tcp_proj w)).
+  Proof.
+    unfold rprod; rewrite <- tcp_conj_proj, tcp_tensor_proj; reflexivity.
+  Qed.
+
+  (** Every pure product state's projection is a nonnegatively-scaled
+      *normalized* pure product's projection -- total, so the converse of
+      Lemma 36 never has to case-split on which factor (if either) was
+      already zero. *)
+  Lemma rprod_normalize_total (v w : l2 qmem) :
+    exists (u u' : l2 qmem) (a : R),
+      inner u u = C1 /\ inner u' u' = C1 /\ (0 <= a)%R /\
+      tcp_proj (rprod v w) = tcp_scale a (tcp_proj (rprod u u')).
+  Proof.
+    destruct (tcp_proj_decompose_unit qmem0 v) as [av [u [Hav [Hu Hveq]]]].
+    destruct (tcp_proj_decompose_unit qmem0 w) as [aw [u' [Haw [Hu' Hweq]]]].
+    exists u, u', (av * aw)%R; repeat split; try assumption.
+    - apply Rmult_le_pos; assumption.
+    - rewrite rprod_proj, Hveq, Hweq.
+      assert (Htens : tcp_tensor (tcp_scale av (tcp_proj u)) (tcp_scale aw (tcp_proj u'))
+                       = tcp_scale (av * aw) (tcp_tensor (tcp_proj u) (tcp_proj u'))).
+      { rewrite <- tcp_scale_tensor_l, <- tcp_scale_tensor_r, tcp_scale_assoc.
+        reflexivity. }
+      rewrite Htens, tcp_conj_scale, <- rprod_proj.
+      reflexivity.
+  Qed.
+
   (** The two projections of a point mass are point masses. *)
   Lemma rcqs_projL_rdirac (m1 m2 : cmem) (rho : tcp rqmem) :
     rcqs_projL (rdirac (m1, m2) rho) = cqdirac m1 (rtcpL rho).

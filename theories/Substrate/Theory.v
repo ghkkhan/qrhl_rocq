@@ -848,6 +848,35 @@ Module HTheory (S : HILBERT_SUBSTRATE).
       symmetry; apply tcp_scale_1.
   Qed.
 
+  (** The zero vector's projection is the zero operator -- the edge case
+      [tcp_proj_normalize] excludes, needed by Lemma 36's converse to handle
+      the (unnormalizable) zero components of a spectral decomposition. *)
+  Lemma tcp_proj_vzero {X} : tcp_proj (@vzero X) = tcp_zero.
+  Proof.
+    assert (H := tcp_proj_vscale X C0 vzero).
+    rewrite (vscale_0 X vzero) in H.
+    rewrite (proj2 (Csqmod_eq0 C0) eq_refl) in H.
+    rewrite H; apply tcp_scale_0.
+  Qed.
+
+  (** Every vector's projection is a nonnegatively-scaled unit vector's
+      projection -- [tcp_proj_normalize] made total by handing back the
+      [x0]-ket (scaled by [0]) on the excluded [v = vzero] case, so callers
+      never have to case-split on it themselves. *)
+  Lemma tcp_proj_decompose_unit {X} (x0 : X) (v : l2 X) :
+    exists (a : R) (u : l2 X),
+      (0 <= a)%R /\ inner u u = C1 /\ tcp_proj v = tcp_scale a (tcp_proj u).
+  Proof.
+    destruct (classic (v = vzero)) as [-> | Hv].
+    - exists 0%R, (ket x0); repeat split.
+      + apply Rle_refl.
+      + rewrite inner_ket;
+          destruct (excluded_middle_informative (x0 = x0)); [ reflexivity | contradiction ].
+      + rewrite tcp_proj_vzero; symmetry; apply tcp_scale_0.
+    - destruct (tcp_proj_normalize v Hv) as [u [t [Hu [Ht Heq]]]].
+      exists t, u; repeat split; [ apply Rlt_le; exact Ht | exact Hu | exact Heq ].
+  Qed.
+
   (** Trace out the *first* factor, keeping the second: the signature's
       [tcp_ptrace2], under the name the rest of the development uses. *)
   Definition tcp_ptraceL {X Y} (r : tcp (X * Y)) : tcp Y := tcp_ptrace2 r.
@@ -1009,6 +1038,31 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     rewrite <- (tcp_conj_Uswap s (tcp_sum F)), (tcp_tensor_sum_r _ _ _ s F H).
     rewrite (tcp_conj_sum _ _ _ Uswap _ (tcp_summable_tensor_r s F H)).
     f_equal; apply funext; intros j; apply tcp_conj_Uswap.
+  Qed.
+
+  (** Two arbitrary sums tensor together into a single sum over the pair of
+      indices -- the general form of [tcp_tensor_sum_l]/[tcp_tensor_sum_r],
+      needed by the converse of Lemma 36 to flatten a tensor of two spectral
+      decompositions into one. *)
+  Lemma tcp_tensor_sum_sum {X Y J K} (F : J -> tcp X) (G : K -> tcp Y) :
+    tcp_summable F -> tcp_summable G ->
+    tcp_summable (fun p : sigT (fun _ : J => K) => tcp_tensor (F (projT1 p)) (G (projT2 p)))
+    /\ tcp_tensor (tcp_sum F) (tcp_sum G)
+       = tcp_sum (fun p : sigT (fun _ : J => K) => tcp_tensor (F (projT1 p)) (G (projT2 p))).
+  Proof.
+    intros H1 H2.
+    assert (Hinner : forall j, tcp_summable (fun k => tcp_tensor (F j) (G k)))
+      by (intros j; apply tcp_summable_tensor_r, H2).
+    assert (Heq2 : (fun j => tcp_sum (fun k => tcp_tensor (F j) (G k)))
+                   = (fun j => tcp_tensor (F j) (tcp_sum G)))
+      by (apply funext; intros j; symmetry; apply tcp_tensor_sum_r, H2).
+    assert (Houter : tcp_summable (fun j => tcp_sum (fun k => tcp_tensor (F j) (G k)))).
+    { rewrite Heq2; apply tcp_summable_tensor_l, H1. }
+    destruct (tcp_sum_sigma (X * Y) J (fun _ => K) (fun j k => tcp_tensor (F j) (G k)) Hinner Houter)
+      as [Hsig Heqsig].
+    split; [ exact Hsig |].
+    rewrite <- Heqsig, Heq2.
+    apply tcp_tensor_sum_l, H1.
   Qed.
 
   Lemma tcp_summable_singleton {X J} (F : J -> tcp X) (j0 : J) :

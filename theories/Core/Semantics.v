@@ -88,6 +88,17 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     apply (tcp_summable_singleton _ m); intros m' H; apply cqdirac_other; exact H.
   Qed.
 
+  (** Scaling a point mass scales its one nonzero block, needed by the
+      converse of Lemma 36: the per-component witnesses it assembles are
+      scaled point masses. *)
+  Lemma cqdirac_scale (a : R) (m : cmem) (rho : tcp qmem) :
+    cqdirac m (tcp_scale a rho) = cqs_scale a (cqdirac m rho).
+  Proof.
+    apply funext; intros m'; unfold cqdirac, cqs_scale.
+    destruct (excluded_middle_informative (m' = m));
+      [ reflexivity | symmetry; apply tcp_scale_zero ].
+  Qed.
+
   (* ================================================================= *)
   (** ** Restriction
 

@@ -125,6 +125,28 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       | apply tcp_summable_trace; exact Hr ].
   Qed.
 
+  (** Scaling a relational state, needed by the converse of Lemma 36: its
+      witness is a sum of *scaled* per-component witnesses. *)
+  Definition rcqs_scale (a : R) (r : rcqs) : rcqs := fun rm => tcp_scale a (r rm).
+
+  Lemma rcqs_projL_scale (a : R) (r : rcqs) :
+    rcqs_wf r -> rcqs_projL (rcqs_scale a r) = cqs_scale a (rcqs_projL r).
+  Proof.
+    intros Hr; apply funext; intros m1; unfold rcqs_projL, rcqs_scale, cqs_scale.
+    transitivity (tcp_sum (fun m2 => tcp_scale a (rtcpL (r (m1, m2))))).
+    - f_equal; apply funext; intros m2; apply rtcpL_scale.
+    - symmetry; apply (tcp_scale_sum _ _ _ _ (rcqs_slice_wf r m1 Hr)).
+  Qed.
+
+  Lemma rcqs_projR_scale (a : R) (r : rcqs) :
+    rcqs_wf r -> rcqs_projR (rcqs_scale a r) = cqs_scale a (rcqs_projR r).
+  Proof.
+    intros Hr; apply funext; intros m2; unfold rcqs_projR, rcqs_scale, cqs_scale.
+    transitivity (tcp_sum (fun m1 => tcp_scale a (rtcpR (r (m1, m2))))).
+    - f_equal; apply funext; intros m1; apply rtcpR_scale.
+    - symmetry; apply (tcp_scale_sum _ _ _ _ (rcqs_slice_wf_R r m2 Hr)).
+  Qed.
+
   (* ================================================================= *)
   (** ** Predicates (Definition 13) *)
 

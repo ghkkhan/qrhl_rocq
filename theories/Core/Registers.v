@@ -610,6 +610,15 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     rewrite <- tcp_conj_ocomp, (proj2 Urqpair_unitary); apply tcp_conj_oid.
   Qed.
 
+  (** The other roundtrip, needed by the converse of Lemma 36 to pull a
+      spectral decomposition taken on the [tcp_conj Urqpair] side back to
+      [rqmem]. *)
+  Lemma tcp_conj_adjUrqpair_roundtrip (r : tcp rqmem) :
+    tcp_conj (oadj Urqpair) (tcp_conj Urqpair r) = r.
+  Proof.
+    rewrite <- tcp_conj_ocomp, (proj1 Urqpair_unitary); apply tcp_conj_oid.
+  Qed.
+
   Lemma conj_roliftL (P : qset) (A : op (qsub P) (qsub P)) (r : tcp rqmem) :
     tcp_conj Urqpair (tcp_conj (roliftL P A) r)
     = tcp_conj (tensoro (olift P A) oid) (tcp_conj Urqpair r).
