@@ -203,6 +203,34 @@ guessed):
 The converse of Lemma 36 is the natural next one: `denote_sum` and the
 `rcqs_fam` machinery `Case` needed are exactly what it was waiting on.
 
+### The register-coherence question — needs a decision
+
+`QInit1` is the one Phase 1d rule with an architectural obstacle, and it is on
+the critical path to Phase 1's exit criterion. It needs the two decompositions
+of the relational memory — side split then register split, versus the
+relational register split — to be identified. One-sided lifts were *defined*
+through the side split precisely to avoid this, and that worked for every rule
+proved so far, but initialization *discards* a register, so it cannot be
+avoided.
+
+The shape of the fix is now clear and is cheaper than earlier notes suggested.
+All the unitaries involved are `Ubij`s, and `tensoro` of `Ubij`s sends kets to
+kets, so the required identity is an index-level computation — provided the
+signature can conclude operator equality from agreement on the computational
+basis:
+
+```coq
+Axiom op_ext_ket : forall X Y (A B : op X Y),
+    (forall x : X, oapp A (ket x) = oapp B (ket x)) -> A = B.
+```
+
+That is the totality of an orthonormal basis: textbook, generic, and silent
+about qRHL, so it passes the hygiene rule as stated. What follows it is not
+cheap — the reassociation `Ubij` has dependent round-trip proofs over
+`fun w => if P w then wty w else unit` — but it keeps the trusted surface
+honest. The alternative is an abstract register primitive (Unruh's
+*Registers*, CoqQ's `qreg`), which is a larger redesign. See `HANDOFF.md` §7c.
+
 ### Two smaller gaps in §4.4
 
 **Lemma 29 / Corollary 30** — the characterization of quantum equality on

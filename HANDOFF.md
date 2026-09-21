@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `c588539`.
+Last updated at commit `98bc31f`.
 
 ---
 
@@ -199,20 +199,31 @@ their projection laws; the program syntax; the denotational semantics with
 - **`denote_wf_trace`** — `⟦c⟧` really is a cq-superoperator on `T⁺_cq[V]`
   (preserves summability, does not increase the trace), for loop-free programs;
 - **`denote_add`** — `⟦c⟧` is additive on the positive cone, loop-free;
+- **`denote_sum`** — `⟦c⟧` is *normal*: `⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ` for an
+  arbitrary index type, loop-free. Packaged with `cqs_fam`, whose single
+  condition is joint summability of the traces over (index, memory);
 
 predicates (Defs 13/14/16/18/20/23, Lemmas 15/17/24/25); quantum equality
 (Def 27, Lemma 31 — whose proof needs *no* hypothesis, because the adjoint laws
 are derived); **Definition 35** with separability as a definition rather than
 an assumption, and Lemma 36 forward (`qrhl_to_pure`).
 
-**Rules** — `Skip` (Lem 54), `Conseq` (Lem 46), `Seq` (Lem 47), `QApply1`
-(Lem 65), `Assign1` (Lem 55).
+Judgment.v additionally has the relational counterpart — `rcqs_sum` /
+`rcqs_fam` with well-formedness, separability, satisfaction, the identity
+`cqs_trace ∘ rcqs_projL = rcqs_trace`, and normality of both projections —
+plus `tcp_sep_sum` and the one-sided reindexing `rbeta`.
+
+**Rules** — `Skip` (Lem 54), `Conseq` (Lem 46), `Seq` (Lem 47), `Case`
+(Lem 48), `QrhlElim` and its equality form (Lem 50), `Assign1` (Lem 55),
+`Sample1` (Lem 56), `If1` (Lem 58), `JointIf` (Lem 59), `Measure1` (Lem 62),
+`QApply1` (Lem 65).
 
 ---
 
 ## 6. The trusted surface
 
-44 parameters, 117 axioms, grouped in `Interface.v`:
+44 parameters, 125 axioms, grouped in `Interface.v` (run `make axioms` for
+the current inventory; the table below is indicative, not maintained):
 
 | group | params | axioms |
 |---|---|---|
@@ -240,87 +251,128 @@ discharges that risk.
 
 ## 7. What to do next, in order
 
-### 7a. `If1` / `JointIf` — cheapest, do this first
+Everything in Phase 1d is done except `JointSample`, `QInit1` and
+`JointMeasureSimple`. The ordering below reflects what is actually blocked by
+what, not the phase numbering.
 
-Needs only the binary `denote_add` (have it) plus **separability closed under
-binary sums**. That in turn needs `tcp_sum` over `bool` to be binary addition:
+### 7a. Lemma 36's converse — the biggest unblocked item
+
+`qrhl_pure A c d B -> qrhl A c d B`, the direction one uses to *establish* a
+judgment. Everything it was waiting on now exists: `denote_sum`, and the
+`rcqs_fam` / `rcqs_sum` machinery in `Judgment.v`.
+
+The shape:
+
+1. `rsep (r rm)` plus `tcp_decompose` on each tensor factor writes
+   `r rm = ∑ tcp_proj (rprod φ ψ)` — using `tcp_tensor_proj` and
+   `tcp_conj_proj`, and needing `tcp_tensor_sum_l` alongside the existing
+   `tcp_tensor_sum_r`.
+2. `tcp_decompose` yields *unnormalized* vectors while `qrhl_pure` wants unit
+   ones, so a normalization step is needed. The clean way is one axiom:
+   ```coq
+   Axiom tcp_proj_normalize : forall X (v : l2 X), tcp_proj v <> tcp_zero ->
+     exists (u : l2 X) (a : R),
+       inner u u = C1 /\ (0 < a)%R /\ tcp_proj v = tcp_scale a (tcp_proj u).
+   ```
+3. The witness is `rcqs_sum` over a sigma index (memory, then decomposition
+   component) of the per-component witnesses **scaled**. So this also needs
+   `denote_scale` — `⟦c⟧(a·ρ) = a·⟦c⟧ρ` for `a ≥ 0`, one more induction in the
+   shape of `denote_add`, probably wanting `tcp_tensor_scale_r`.
+4. Then joint summability of the assembled family, which is `rcqs_fam` and the
+   sigma lemmas (`tcp_sum_sigma`).
+
+Budget honestly: this is the largest single remaining piece in Phase 1. The
+sigma-index bookkeeping, not the mathematics, is the work.
+
+### 7b. `JointSample` (Lem 57)
+
+`Sample1`'s pattern with a coupling `f : rexpr (distr (ctype x * ctype y))`.
+The witness updates `x₁` and `y₂` together, so `rbeta` has to be replaced by
+its two-sided analogue, and the two projections each need one marginal of `f`
+(which is where the precondition's `marginalᵢ f = idxᵢ eᵢ` is used). Tonelli
+over the pair does the marginal. No architectural obstacle; about the size of
+`Sample1`.
+
+### 7c. `QInit1` — and the register-coherence question this forces
+
+**This is the item to raise with the user before doing.** `QInit1` is on the
+critical path to Phase 1's exit criterion (the EPR examples need it), and it
+is blocked on relating two decompositions of the relational memory:
+
+- the side split `rqmem ≅ qmem ⊗ qmem` (via `Urqpair`), followed by the
+  register split `qmem ≅ ℓ²[Q] ⊗ ℓ²[Qᶜ]` (via `Wsplit`), against
+- the relational register split `rqmem ≅ ℓ²[idx₁ Q] ⊗ ℓ²[(idx₁ Q)ᶜ]` (via
+  `Wsplit` on `rqvar`).
+
+Defining one-sided lifts through `Urqpair` sidestepped this for all the rules
+proved so far, but `QInit1` cannot be sidestepped: the operation *discards* a
+register, so its left projection and its separability both need the two
+pictures identified. Lemma 32, `Frame` and `Equal` want the same thing.
+
+Since the last handoff the shape of the fix has become clear, and it is
+cheaper than the earlier note suggested. `Wsplit`, `Urqpair` and the
+reassociation are all `Ubij`s, and `tensoro` of `Ubij`s sends kets to kets, so
+the required unitary identity is an index-level computation — *provided* the
+signature can conclude operator equality from agreement on the computational
+basis:
 
 ```coq
-Lemma tcp_sum_bool {X} (G : bool -> tcp X) : tcp_sum G = tcp_add (G true) (G false).
+Axiom op_ext_ket : forall X Y (A B : op X Y),
+    (forall x : X, oapp A (ket x) = oapp B (ket x)) -> A = B.
 ```
 
-Provable from `tcp_sum_ub` / `tcp_sum_least` / `tcp_ext` by enumerating the
-duplicate-free lists of booleans (nil, `[true]`, `[false]`, and the two
-two-element ones). Then `tcp_sep` is closed under `tcp_add` via
-`tcp_sum_sigma` at `K := bool`.
+That is the totality of an orthonormal basis: textbook, generic in `X` and
+`Y`, and mentioning nothing about qRHL — so it passes the hygiene rule as
+stated. The signature already declines to expose the continuity that would let
+it be derived (see the comment on `Ubij_unitary`), which is exactly why it has
+to be assumed rather than proved.
 
-The rest of `If1` is straightforward: split `r` by `ev (idx SL e) rm`, note the
-guard is independent of the other side's memory (so it commutes with the
-projection), and recombine. `rcqs_projR` is additive via `rtcpR_add` +
-`tcp_sum_add`.
+What it costs afterwards is *not* small: the reassociation unitary has to be
+built as a `Ubij` between `rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and
+`(qsub P × qsub Pᶜ) × qmem`, and its two round-trip proofs are dependent
+function equalities over `fun w => if P w then wty w else unit`. Expect this
+to be the most painful Rocq in the development. The alternative — an abstract
+register primitive in the style of Unruh's *Registers* or CoqQ's `qreg` — is a
+larger redesign but replaces the pain with a clean interface.
 
-### 7b. `Sample1`
+**Recommendation: add `op_ext_ket` and derive the coherence theorem**, since
+it keeps the hygiene line where it is. But confirm before starting.
 
-Follows `Assign1` exactly, with subdistribution weights. Additionally needs
+### 7d. `JointMeasureSimple` (Lem 64)
 
-```coq
-Axiom tcp_sum_scale_const : forall X J (c : J -> R) (r : tcp X),
-  (forall j, 0 <= c j)%R -> summable c ->
-  tcp_sum (fun j => tcp_scale (c j) r) = tcp_scale (tsum c) r.
-```
+`Measure1`'s pattern applied on both sides at once, plus the quantum equality
+`Q′₁ ≡quant Q′₂` in the precondition. Notably it does *not* require the
+measurements to be total (the paper says so explicitly, p. 32), so
+`tcp_ptrace2_meas_tensor` is not what makes its projections work — the two
+sides' measurements cancel against each other through the quantum equality
+instead.
 
-and the `Cla[e is total]` bookkeeping (the precondition only constrains
-memories whose block is nonzero — see `psat_Cla`).
-
-### 7c. `Case`, and Lemma 36's converse
-
-**`Case` needs `denote` *normality*, not additivity** — this was the main
-surprise of the last session. The case split is over an arbitrary result type,
-not two branches, so binary additivity does not suffice:
-
-```coq
-Theorem denote_sum : ... -> denote c (cqs_sum F) = cqs_sum (fun j => denote c (F j)).
-```
-
-Another induction over the syntax, in the shape of `denote_add`, needing sum
-exchange in the `Assign`/`Sample`/`Measure` clauses. Once it exists, Lemma 36's
-converse (`qrhl_pure -> qrhl`) becomes reachable: decompose via
-`tcp_decompose`, apply the hypothesis per pure component, and reassemble. The
-paper's equations (11)–(14) are exactly that bookkeeping.
-
-### 7d. `QInit1`
-
-Needs **abstract superoperators** in the signature, with `E ⊗ id`.
-Initialization discards a register and prepares a fresh state, which is a
-channel, not a conjugation, so none of the existing `tcp_conj` machinery
-applies. Definition 10's locality — and hence rules `Frame` and `Equal` — needs
-the same thing, so do it once and properly.
-
-### 7e. `Measure1`, `JointMeasureSimple`
-
-Per-outcome witnesses reassembled; same machinery as 7c.
-
-### 7f. §4.4's two remaining lemmas
+### 7e. §4.4's two remaining lemmas
 
 - **Lemma 29 / Corollary 30** needs the Schmidt decomposition (paper Lemma 7)
   as a new axiom. The *converse* direction — the one the examples use, to
   *establish* a quantum equality — is six lines and needs only that `U₁`, `U₂`
   are isometries. Do that first.
-- **Lemma 32** needs register associativity: that `rolift (qidx SL P)` agrees
-  with `roliftL P`. Not provable from the current signature — `Wsplit` is built
-  from `Ubij` and so has laws only on basis vectors, while the identity has a
-  general vector in the middle. Options: an `op_ext_ket`-style
-  determination axiom plus a long derivation, or an abstract register primitive
-  (Unruh's *Registers*, CoqQ's `qreg`). **This moves the hygiene line, so raise
-  it rather than deciding alone.**
+- **Lemma 32** is the register-coherence statement of 7c; it falls out of the
+  same work.
+
+### 7f. Extending the inductions past `loopfree`
+
+`denote_wf_trace`, `denote_add` and `denote_sum` are all stated for loop-free
+programs, and `Case` inherits `wt`/`loopfree` side conditions from
+`denote_sum` that the paper's rule does not have. Bringing `sem_while` into
+those three inductions removes all of that at once, and is a prerequisite for
+`While1`/`JointWhile` anyway. `sem_while` is already an infinite sum over
+iteration counts, so the argument is an exchange of that sum with the family
+sum — the same `tcp_sum_swap` pattern as everywhere else.
 
 ### 7g. Then Phase 1e onward
 
-Ltac2 tactics and the EPR examples (Phase 1's exit criterion), Phase 2's
-structural rules and loops (`while` also unblocks extending `denote_wf_trace`
-and `denote_add` past `loopfree`), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and
-Phase 4's finite-dimensional model — which is the only thing that turns
-"sound relative to a signature" into "sound".
+Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on 7c),
+Phase 2's remaining structural rules (`Sym`, `Frame`, `Equal`, `QrhlElimEq`)
+and loops, Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and Phase 4's
+finite-dimensional model — which is the only thing that turns "sound relative
+to a signature" into "sound".
 
 ---
 
@@ -335,7 +387,29 @@ Recorded so they are not re-derived.
   unique. The sum collapses **after** reindexing, not before — and that is
   exactly why the right-hand projection comes back unchanged. An earlier
   attempt assumed the wrong thing here and had to be thrown away.
-- **`Case` needs normality, not additivity** (see 7c).
+- **`Case` needs normality, not additivity.** Now proved (`denote_sum`). The
+  case split is over an arbitrary result type, not two branches, so binary
+  additivity does not suffice.
+- **`Measure1`'s right projection is exactly where totality is used.** The
+  right program is `skip`, so the right marginal has to come back unchanged,
+  and only a *trace-preserving* operation on the left does that. This is what
+  `Cla[idx₁ e is a total measurement]` is doing in the precondition, and it is
+  why `JointMeasureSimple` — which the paper says needs no totality — must
+  work differently.
+- **`QrhlElim` needs no register machinery.** The paper states it with a
+  renaming superoperator `E_{rename,idxᵢ}` relating `ρᵢ` to a marginal of `ρ`.
+  Here Definition 35's projections already land in `cqs`, so `ρ₁` *is*
+  `rcqs_projL ρ` and the side conditions vanish. It was proved far ahead of
+  its phase because of that.
+- **`rewrite` fails surprisingly often on terms that print identically.** Three
+  times now (`tcp_trace_conj_isometry in Hb`, `olift_meas_total`'s `Heq`,
+  `tcp_ptraceL_sum` in the `QInit` clause of `denote_sum`) a `rewrite` was
+  rejected with "found no subterm matching" against a term visibly present in
+  the goal — implicit type arguments elaborated differently (`qmem` versus
+  `wmem qvar qtype`). The fix is always the same: replace the `rewrite` with an
+  explicit `transitivity` to the intended term and close it with `apply`,
+  which unifies up to conversion. Reach for that immediately rather than
+  fighting the `rewrite`.
 - **The other partial trace is not derivable from a tensor swap.** Going
   `tcp_ptrace ∘ tcp_conj Uswap` would need the swap's action on a general,
   non-product, non-pure operator, which the signature cannot compute. Hence
