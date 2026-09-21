@@ -457,6 +457,14 @@ Module Type HILBERT_SUBSTRATE.
   Axiom tcp_trace_proj : forall X (v : l2 X),
       tcp_trace (tcp_proj v) = Cre (inner v v).
 
+  (** Scaling a vector rescales its rank-one projection by the squared
+      modulus: [proj(a.v) = |a|^2 . proj(v)] (textbook -- this is literally
+      what [tcp_proj v := |v><v|] means). It is what lets [Lemma 36]'s
+      converse normalize the (generally unnormalized) vectors [tcp_decompose]
+      hands back. *)
+  Axiom tcp_proj_vscale : forall X (a : C) (v : l2 X),
+      tcp_proj (vscale a v) = tcp_scale (Csqmod a) (tcp_proj v).
+
   (** *** Conjugation *)
 
   Axiom tcp_conj_proj : forall X Y (A : op X Y) (v : l2 X),

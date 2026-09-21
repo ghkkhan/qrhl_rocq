@@ -262,6 +262,7 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_trace_scale` | `forall X (a : R) (r : tcp X), tcp_trace (tcp_scale a r) = (a * tcp_trace r)%R` |
 | Axiom | `tcp_trace_faithful` | `forall X (r : tcp X), tcp_trace r = 0%R -> r = tcp_zero` |
 | Axiom | `tcp_trace_proj` | `forall X (v : l2 X), tcp_trace (tcp_proj v) = Cre (inner v v)` |
+| Axiom | `tcp_proj_vscale` | `forall X (a : C) (v : l2 X), tcp_proj (vscale a v) = tcp_scale (Csqmod a) (tcp_proj v)` |
 | Axiom | `tcp_conj_proj` | `forall X Y (A : op X Y) (v : l2 X), tcp_conj A (tcp_proj v) = tcp_proj (oapp A v)` |
 | Axiom | `tcp_conj_add` | `forall X Y (A : op X Y) (r s : tcp X), tcp_conj A (tcp_add r s) = tcp_add (tcp_conj A r) (tcp_conj A s)` |
 | Axiom | `tcp_conj_scale` | `forall X Y (A : op X Y) (a : R) (r : tcp X), tcp_conj A (tcp_scale a r) = tcp_scale a (tcp_conj A r)` |
@@ -316,6 +317,6 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_supp_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_supp (tcp_sum F) = hSup (fun j => tcp_supp (F j))` |
 | Axiom | `tcp_decompose` | `forall X (r : tcp X), exists (J : Type) (psi : J -> l2 X), tcp_summable (fun j => tcp_proj (psi j)) /\ r = tcp_sum (fun j => tcp_proj (psi j))` |
 
-**Totals: 44 parameters, 127 axioms.**
+**Totals: 44 parameters, 128 axioms.**
 
 <!-- END GENERATED INVENTORY -->

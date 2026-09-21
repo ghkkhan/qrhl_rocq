@@ -794,6 +794,49 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     tcp_conj Uswap (tcp_tensor r s) = tcp_tensor s r.
   Proof. unfold Uswap; apply tcp_conj_pswap. Qed.
 
+  (* ================================================================= *)
+  (** ** Normalizing a rank-one projection
+
+      [tcp_decompose] hands back vectors that need not be unit -- Lemma 36's
+      converse wants unit ones, since [qrhl_pure] is stated for normalized
+      states. [tcp_proj_vscale] is exactly enough to fix that: rescale by the
+      reciprocal square root of the trace, which is real algebra once
+      [inner v v]'s realness ([inner_ge0]) is used to see [Cre (inner v v)]
+      as the whole story. *)
+
+  Lemma tcp_proj_normalize {X} (v : l2 X) :
+    v <> vzero ->
+    exists (u : l2 X) (t : R),
+      inner u u = C1 /\ (0 < t)%R /\ tcp_proj v = tcp_scale t (tcp_proj u).
+  Proof.
+    intros Hv.
+    destruct (inner_ge0 X v) as [Him Hnn].
+    set (t := Cre (inner v v)) in *.
+    assert (Hvv : inner v v = RtoC t) by (apply Cis_real_RtoC; exact Him).
+    assert (Ht0 : t <> 0%R).
+    { intros Heq; apply Hv, inner_definite.
+      rewrite Hvv, Heq; reflexivity. }
+    assert (Htpos : (0 < t)%R) by lra.
+    assert (Hsqrt_pos : (0 < sqrt t)%R) by (apply sqrt_lt_R0; exact Htpos).
+    set (s := (/ sqrt t)%R).
+    assert (Hss : (s * s = / t)%R).
+    { unfold s; rewrite <- Rinv_mult, (sqrt_sqrt t (Rlt_le _ _ Htpos)); reflexivity. }
+    assert (Hst : (s * s * t = 1)%R) by (rewrite Hss; field; exact Ht0).
+    set (u := vscale (RtoC s) v).
+    exists u, t; split; [| split; [ exact Htpos |]].
+    - unfold u; rewrite inner_scalel, inner_scaler, Cconj_RtoC, Hvv.
+      apply Ceq_intro; cbn; nra.
+    - assert (Hpv : tcp_proj u = tcp_scale (/ t)%R (tcp_proj v)).
+      { unfold u; rewrite tcp_proj_vscale.
+        assert (Hsq : Csqmod (RtoC s) = (/ t)%R).
+        { unfold Csqmod, RtoC; cbn.
+          rewrite <- Hss; nra. }
+        rewrite Hsq; reflexivity. }
+      rewrite Hpv, tcp_scale_assoc.
+      rewrite Rinv_r by exact Ht0.
+      symmetry; apply tcp_scale_1.
+  Qed.
+
   (** Trace out the *first* factor, keeping the second: the signature's
       [tcp_ptrace2], under the name the rest of the development uses. *)
   Definition tcp_ptraceL {X Y} (r : tcp (X * Y)) : tcp Y := tcp_ptrace2 r.
@@ -929,6 +972,32 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply (summable_mono _ (fun j => tcp_trace (F j))).
     - apply tcp_summable_trace; exact Hs.
     - intros j; rewrite (tcp_trace_conj_isometry _ _ _ _ HA); apply Rle_refl.
+  Qed.
+
+
+  (** The mirror of [tcp_tensor_sum_r] / [tcp_summable_tensor_r], normality
+      in the factor that varies on the *left*. Not a second axiom: conjugate
+      by the factor swap, apply the right-hand version, and swap back. *)
+  Lemma tcp_summable_tensor_l {X Y J} (F : J -> tcp X) (s : tcp Y) :
+    tcp_summable F -> tcp_summable (fun j => tcp_tensor (F j) s).
+  Proof.
+    intros H.
+    assert (Heq : (fun j => tcp_tensor (F j) s)
+                  = (fun j => tcp_conj Uswap (tcp_tensor s (F j))))
+      by (apply funext; intros j; symmetry; apply tcp_conj_Uswap).
+    rewrite Heq.
+    apply (tcp_summable_conj Uswap _ (proj1 Uswap_unitary)),
+      tcp_summable_tensor_r, H.
+  Qed.
+
+  Lemma tcp_tensor_sum_l {X Y J} (F : J -> tcp X) (s : tcp Y) :
+    tcp_summable F ->
+    tcp_tensor (tcp_sum F) s = tcp_sum (fun j => tcp_tensor (F j) s).
+  Proof.
+    intros H.
+    rewrite <- (tcp_conj_Uswap s (tcp_sum F)), (tcp_tensor_sum_r _ _ _ s F H).
+    rewrite (tcp_conj_sum _ _ _ Uswap _ (tcp_summable_tensor_r s F H)).
+    f_equal; apply funext; intros j; apply tcp_conj_Uswap.
   Qed.
 
   Lemma tcp_summable_singleton {X J} (F : J -> tcp X) (j0 : J) :
