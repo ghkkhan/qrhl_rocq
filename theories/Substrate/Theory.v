@@ -550,6 +550,11 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     tcp_ptrace (tcp_conj (oadj Uprodassoc) (tcp_tensor a Y)) = tcp_tensor a (tcp_ptrace Y).
   Proof. unfold Uprodassoc; rewrite Ubij_adj; apply tcp_ptrace_passoc. Qed.
 
+  Lemma tcp_ptrace2_Uprodassoc_r {A B C} (a : tcp A) (Y : tcp (B * C)) :
+    tcp_ptrace2 (tcp_conj (oadj Uprodassoc) (tcp_tensor a Y))
+    = tcp_scale (tcp_trace a) (tcp_ptrace2 Y).
+  Proof. unfold Uprodassoc; rewrite Ubij_adj; apply tcp_ptrace2_passoc_r. Qed.
+
   (** The identity reindexing is [oid], and composing two [Ubij]s along
       composable index maps is the [Ubij] of the composite -- both index-level
       computations once [op_ext_ket] is in hand. Every syntactic identity

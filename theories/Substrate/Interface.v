@@ -695,6 +695,22 @@ Module Type HILBERT_SUBSTRATE.
                   (tcp_tensor a Y))
       = tcp_tensor a (tcp_ptrace Y).
 
+  (** The third combination [QInit1]'s witness needs, distinct from both
+      above: reassociating the *other* way and then discarding the *newly
+      outer first* factor entirely (not just retracting one side of it).
+      Since that factor's own trace is all that survives a total discard,
+      the fresh scale factor is the price of not needing yet another Ubij
+      argument on the right. Same non-derivability reason as the other two:
+      the associator's action on a general, possibly entangled, tensor
+      vector is exactly the continuity gap the signature does not expose. *)
+  Axiom tcp_ptrace2_passoc_r : forall A B C H1 H2 (a : tcp A) (Y : tcp (B * C)),
+      tcp_ptrace2
+        (tcp_conj (@Ubij (A * (B * C)) ((A * B) * C)
+                     (fun p => ((fst p, fst (snd p)), snd (snd p)))
+                     (fun p => (fst (fst p), (snd (fst p), snd p))) H1 H2)
+                  (tcp_tensor a Y))
+      = tcp_scale (tcp_trace a) (tcp_ptrace2 Y).
+
   Axiom tcp_tensor_proj : forall X Y (v : l2 X) (w : l2 Y),
       tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w).
   Axiom tcp_scale_tensor_l : forall X Y (a : R) (r : tcp X) (s : tcp Y),

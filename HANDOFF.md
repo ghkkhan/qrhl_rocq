@@ -274,8 +274,8 @@ inventory in `AXIOMS.md`, which is where the statements live.
 | Preimages of subspaces | 1 | 1 |
 | Tensor product | 4 | 13 |
 | Reindexing | 1 | 3 |
-| Positive trace-class operators | 14 | 73 |
-| **total** | **44** | **130** |
+| Positive trace-class operators | 14 | 74 |
+| **total** | **44** | **131** |
 
 Additions since Lemma 36's converse was proved (this count; `make axioms`
 regenerates `AXIOMS.md`, which is authoritative): **`op_ext_ket`** (replacing
@@ -286,15 +286,18 @@ alone, since the swap's action on a general non-ket vector is exactly the
 continuity gap the signature declines to expose), at +1, **`tcp_proj_vscale`**
 (rescaling a vector rescales its projection by the modulus squared -- needed
 to normalize the unnormalized vectors `tcp_decompose` hands back; see §7a),
-and, most recently, at +2, **`tcp_ptrace2_passoc`** / **`tcp_ptrace_passoc`**
-(partial trace commutes with reassociating a tensor product, in each of the
-two directions that matter -- see §7d for exactly where `QInit1`'s witness
-needs each one). Everything landed for Lemma 36's converse itself (steps 1-4
+and, most recently, at +3, **`tcp_ptrace2_passoc`** / **`tcp_ptrace_passoc`**
+/ **`tcp_ptrace2_passoc_r`** (partial trace commutes with reassociating a
+tensor product, in each of the three combinations that turned out to matter
+-- see §7d for exactly where `QInit1`'s witness needs each one; the third
+was not anticipated until the projection proofs were worked out by hand).
+Everything landed for Lemma 36's converse itself (steps 1-4
 of the old §7a plan, and the theorem's own assembly) added **zero** further
 axioms -- `make assumptions` is unchanged from before that work, and is also
 unchanged by the `passoc` pair.
 
-**`tcp_ptrace2_passoc`/`tcp_ptrace_passoc` have no consumer yet.** They are
+**`tcp_ptrace2_passoc`/`tcp_ptrace_passoc`/`tcp_ptrace2_passoc_r` have no
+consumer yet.** They are
 added ahead of `rule_QInit1` itself, which is not proved in this session. That
 is normally exactly what the hygiene rule (never speculative) forbids; it is
 legitimate here only because §7d derives, by hand, the precise two call sites
