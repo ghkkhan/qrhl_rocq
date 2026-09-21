@@ -5,8 +5,9 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `7f69f69`. Seventeen of the paper's rules are proved,
-with no admits and no axioms outside the substrate signature.
+Last updated at commit `16cdd44`. Seventeen of the paper's rules are proved,
+Lemma 36 is proved in both directions, and there are no admits and no axioms
+outside the substrate signature.
 
 ---
 
@@ -216,6 +217,7 @@ their projection laws; the program syntax; the denotational semantics with
 - **`denote_sum`** — `⟦c⟧` is *normal*: `⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ` for an
   arbitrary index type. Packaged with `cqs_fam`, whose single condition is
   joint summability of the traces over (index, memory);
+- **`denote_scale`** — `⟦c⟧(a·ρ) = a·⟦c⟧ρ` for `a ≥ 0`;
 
 All three now hold for **every** well-typed program, loops included; the loop
 clause is the telescoping estimate in `Semantics.v`'s `While` section.
@@ -224,12 +226,15 @@ clause is the telescoping estimate in `Semantics.v`'s `While` section.
 predicates (Defs 13/14/16/18/20/23, Lemmas 15/17/24/25); quantum equality
 (Def 27, Lemma 31 — whose proof needs *no* hypothesis, because the adjoint laws
 are derived); **Definition 35** with separability as a definition rather than
-an assumption, and Lemma 36 forward (`qrhl_to_pure`).
+an assumption, and **Lemma 36 in both directions** (`qrhl_to_pure` and
+`qrhl_pure_to_qrhl` — the latter needs `wt c`/`wt d`; see §7a).
 
 Judgment.v additionally has the relational counterpart — `rcqs_sum` /
 `rcqs_fam` with well-formedness, separability, satisfaction, the identity
 `cqs_trace ∘ rcqs_projL = rcqs_trace`, and normality of both projections —
-plus `tcp_sep_sum` and the one-sided reindexing `rbeta`.
+plus `tcp_sep_sum`, the one-sided reindexing `rbeta`, `rsep_pure_decompose`
+(the spectral theorem pushed through separability), and `rcqs_scale` with its
+own well-formedness/separability/satisfaction lemmas.
 
 **Rules** — seventeen of the paper's, with the lemma number each is proved
 from:
@@ -269,15 +274,21 @@ inventory in `AXIOMS.md`, which is where the statements live.
 | Preimages of subspaces | 1 | 1 |
 | Tensor product | 4 | 13 |
 | Reindexing | 1 | 3 |
-| Positive trace-class operators | 14 | 70 |
-| **total** | **44** | **127** |
+| Positive trace-class operators | 14 | 71 |
+| **total** | **44** | **128** |
 
-Two additions since the last count, both used by rule `Sym`: **`op_ext_ket`**
-(replacing `op_ext`, net zero axioms -- see §7c) and, at +2, **`tcp_ptrace_pswap`**
-/ **`tcp_conj_pswap`** (the factor-swap versions of the existing
+Additions since Lemma 36's converse was proved (this count; `make axioms`
+regenerates `AXIOMS.md`, which is authoritative): **`op_ext_ket`** (replacing
+`op_ext`, net zero axioms -- see §7c), at +2, **`tcp_ptrace_pswap`** /
+**`tcp_conj_pswap`** (the factor-swap versions of the existing
 partial-trace/tensor laws -- textbook, but not derivable from `op_ext_ket`
 alone, since the swap's action on a general non-ket vector is exactly the
-continuity gap the signature declines to expose).
+continuity gap the signature declines to expose), and at +1, **`tcp_proj_vscale`**
+(rescaling a vector rescales its projection by the modulus squared -- needed
+to normalize the unnormalized vectors `tcp_decompose` hands back; see §7a).
+Everything landed for Lemma 36's converse itself (steps 1-4 of the old §7a
+plan, and the theorem's own assembly) added **zero** further axioms --
+`make assumptions` is unchanged from before that work.
 
 Discipline when adding one: it must be a statement you could cite a textbook
 for; it must be *used* by a proof you are writing now (never speculatively);
@@ -300,34 +311,59 @@ Everything in Phase 1d is done except `QInit1` and `JointMeasureSimple`. The
 ordering below reflects what is actually blocked by what, not the phase
 numbering.
 
-### 7a. Lemma 36's converse — the biggest unblocked item
+### 7a. Lemma 36's converse — DONE
 
-`qrhl_pure A c d B -> qrhl A c d B`, the direction one uses to *establish* a
-judgment. Everything it was waiting on now exists: `denote_sum`, and the
-`rcqs_fam` / `rcqs_sum` machinery in `Judgment.v`.
+`qrhl_pure_to_qrhl : wt c -> wt d -> qrhl_pure A c d B -> qrhl A c d B`
+(`Judgment.v`), the direction one uses to *establish* a judgment. Together
+with the forward direction (`qrhl_to_pure`, proved earlier), Lemma 36 is now
+proved both ways — but **not as a clean iff**: the converse needs `wt c` and
+`wt d` (well-typedness), which the forward direction and the paper's
+statement do not. This is unavoidable, not a choice — `denote_scale`,
+`denote_sum`, and `denote_trace_le` (the facts the assembly leans on) all
+carry a `wt` hypothesis, because `⟦·⟧` is defined for every syntactic
+program but is only *shown* additive/normal/trace-non-increasing under
+well-typedness. Every rule proof that invokes this direction already
+threads `wt c`/`wt d` through (rule `Case` does the same), so this costs
+nothing downstream; it is just a fact worth having said explicitly rather
+than leaving the docstring's "both directions" claim to imply an iff.
 
-The shape:
+The four steps the previous version of this section planned all landed
+essentially as predicted:
 
-1. `rsep (r rm)` plus `tcp_decompose` on each tensor factor writes
-   `r rm = ∑ tcp_proj (rprod φ ψ)` — using `tcp_tensor_proj` and
-   `tcp_conj_proj`, and needing `tcp_tensor_sum_l` alongside the existing
-   `tcp_tensor_sum_r`.
-2. `tcp_decompose` yields *unnormalized* vectors while `qrhl_pure` wants unit
-   ones, so a normalization step is needed. The clean way is one axiom:
-   ```coq
-   Axiom tcp_proj_normalize : forall X (v : l2 X), tcp_proj v <> tcp_zero ->
-     exists (u : l2 X) (a : R),
-       inner u u = C1 /\ (0 < a)%R /\ tcp_proj v = tcp_scale a (tcp_proj u).
-   ```
-3. The witness is `rcqs_sum` over a sigma index (memory, then decomposition
-   component) of the per-component witnesses **scaled**. So this also needs
-   `denote_scale` — `⟦c⟧(a·ρ) = a·⟦c⟧ρ` for `a ≥ 0`, one more induction in the
-   shape of `denote_add`, probably wanting `tcp_tensor_scale_r`.
-4. Then joint summability of the assembled family, which is `rcqs_fam` and the
-   sigma lemmas (`tcp_sum_sigma`).
+1. `rsep_pure_decompose`: `rsep (r rm)` plus `tcp_decompose` on each tensor
+   factor writes `r rm = ∑ tcp_proj (rprod φ ψ)`, via `tcp_tensor_proj`,
+   `tcp_conj_proj`, and the new `tcp_tensor_sum_sum` (the general two-sums-
+   tensor-into-one-sigma-sum fact, of which `tcp_tensor_sum_l`/
+   `tcp_tensor_sum_r` are the one-sided cases).
+2. `tcp_proj_normalize` (one new axiom, `tcp_proj_vscale`-derived) normalizes
+   the unnormalized vectors `tcp_decompose` hands back; made total by
+   `tcp_proj_decompose_unit` (handling the zero-vector case with a default
+   unit ket, scaled by 0) so callers never case-split on it.
+3. `denote_scale` — proved exactly as planned, a `denote_add`-shaped
+   induction.
+4. The sigma-index bookkeeping (`rsep_pure_decompose`'s witness type,
+   `pure_scaled_witness`'s per-component application of `qrhl_pure`, and the
+   main theorem's assembly via `rcqs_sum`/`rcqs_fam`) was the real work, and
+   turned out to need **one more piece than budgeted**: closing the two
+   projection equations (`rcqs_projL (rcqs_sum r') = denote c (rcqs_projL r)`
+   and its mirror) cannot be done directly from the per-component witnesses'
+   own projection facts (`HL`/`HR` in the proof) — `denote_sum` needs to know
+   the *input* family (the scaled point masses fed to `qrhl_pure`) is jointly
+   summable, and that fact isn't otherwise available. The fix was an
+   auxiliary "input" point-mass family `R0` (one `rdirac` per
+   (memory, decomposition-component) pair) that exists purely so the proof
+   can invoke `rcqs_projL_sum`/`rcqs_fam_projL` on it — its own summability
+   comes for free from the same `lamf` bound the witnesses' summability
+   needs, and it sums back to `r` itself (`Hcollapse`, proved via
+   `tcp_sum_sigma` read right-to-left plus `tcp_sum_singleton`). This
+   "construct an rcqs whose only job is to be summed" pattern is worth
+   knowing if a similar closure gap shows up again.
 
-Budget honestly: this is the largest single remaining piece in Phase 1. The
-sigma-index bookkeeping, not the mathematics, is the work.
+Budget honestly, in retrospect: right order of magnitude, wrong shape —
+the four steps landed as one-line summaries each said they would, but step 4
+alone needed `tcp_sum_sigma` three separate times (the decomposition's own
+flatten, the collapse, and the scalar-summability transfer via
+`tcp_summable_trace`), not once.
 
 ### 7b. `JointSample` (Lem 57) — DONE
 
@@ -560,6 +596,22 @@ Recorded so they are not re-derived.
   it (the reverse `himg` inclusion for a unitary is exactly the kind of fact
   the `himg_ocomp` gap in `Theory.v` also lacks — `himg_ocomp_le` is one
   direction only).
+- **`Judgment.v` is now large enough that silent name collisions are a real
+  cost.** While building Lemma 36's converse a new `tcp_sep_scale` was
+  written from scratch (with a `(0 <= a)%R` hypothesis) before noticing an
+  *unconditional* `tcp_sep_scale` already existed, from earlier `roliftL`
+  work, a few hundred lines further down the same file (bounding the
+  summable-family trace via `Rabs a` instead of assuming nonnegativity).
+  Rocq caught the duplicate name at compile time, not the redundant work —
+  grep for a lemma's likely name before writing it, especially for anything
+  shaped like "X is preserved by scaling/tensoring/conjugating".
+- **The `R0`-detour pattern** (§7a): when an assembled sum's projection can't
+  be related back to the original state directly from the per-component
+  witnesses' own projection facts, because `denote_sum` needs the *input*
+  family's joint summability and that isn't otherwise in hand, build a
+  throwaway `rcqs` (here, one `rdirac` per component) whose only purpose is
+  to have `rcqs_projL_sum`/`rcqs_fam_projL` invoked on it. Worth reaching for
+  again rather than trying to force the closure through the witnesses alone.
 
 ---
 
@@ -569,6 +621,14 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
+| `16cdd44` | `qrhl_pure_to_qrhl` — Lemma 36's converse, the main theorem |
+| `11a08bc` | trace/summability helpers (`inner_rprod`, `rdirac_trace`/`cqdirac_trace`, `cqs_scale_wf`/`cqs_trace_scale`, `tcp_summable_zero`) the converse's assembly needs |
+| `1c7ccae` | `pure_scaled_witness` — the converse's per-component step |
+| `7dac726` | scaling preserves `rcqs_wf`/`rcqs_sep`/`psat` |
+| `a7c8892` | `rsep_pure_decompose` — the spectral theorem pushed through separability |
+| `76a25a3` | `rcqs_scale`, `tcp_proj_vzero`/`tcp_proj_decompose_unit`, `tcp_tensor_sum_sum`, `rprod_proj`/`rprod_normalize_total`, `cqdirac_scale` — the converse's normalization/sum-flattening building blocks |
+| `8587d1e` | `denote_scale`; `tcp_scale_tensor_r` |
+| `34e32a7` | `tcp_tensor_sum_l`, `tcp_proj_normalize` (steps 1-2 of the converse's plan) |
 | `7f69f69` | `op_ext_ket` (replacing `op_ext`); `Sym` (Lem 44); `Urqswap`, `predswap`, `rcqs_swap`; two new axioms (`tcp_ptrace_pswap`, `tcp_conj_pswap`) |
 | `3a869ab` | `JointSample` (Lem 57); `Core/Vars.v` right/cross-side `rcupd` mirrors; `Core/Judgment.v` `rbeta2`; `Substrate/Sums.v` marginals |
 | `8563c58` | `JointWhile` (Lem 61) |

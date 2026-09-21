@@ -79,7 +79,7 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1b | `denote_sum`: `⟦c⟧` is normal (`⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ`) | **done**, loops included |
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
-| 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
+| 1c | Definition 35 (the judgment), Lemma 36 (both directions) | **done** |
 | 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` `JointSample` | **done** |
 | 2 | `QrhlElim` (Lemma 50) and its equality form, `JointWhile` (Lemma 61), `Sym` (Lemma 44) | **done** (ahead of their phase) |
 | 1d | `QInit1`, `JointMeasureSimple` | in progress, see below |
@@ -210,9 +210,6 @@ guessed):
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
 | `JointMeasureSimple` | the same pattern as `Measure1`/`JointSample` combined, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
 
-The converse of Lemma 36 is the natural next one: `denote_sum` and the
-`rcqs_fam` machinery `Case` needed are exactly what it was waiting on.
-
 `JointSample` (Lemma 57) is proved, needing no new axioms. Unlike `Sample1`
 — where only the un-sampled side's projection needs a probability identity —
 here *both* `x` and `y` are sampled, so both projections need one: the
@@ -266,6 +263,35 @@ needs. Consulted a stronger model on whether to add `op_ext_ket` at all before
 starting any of this, since design decisions on the substrate are outside
 this project's usual reviewer's expertise; see `HANDOFF.md` §7c for that
 exchange.
+
+The converse of Lemma 36 (`qrhl_pure_to_qrhl`) is proved, completing the
+lemma in both directions, though not as a clean iff: unlike the forward
+direction, it needs `wt c` and `wt d`, since the facts it leans on
+(`denote_scale`, `denote_sum`, `denote_trace_le`) are all stated for
+well-typed programs only. The argument: `rsep_pure_decompose` writes an
+arbitrary separable state's block at each memory as a sum of pure products,
+via the substrate's spectral theorem (`tcp_decompose`) applied to each
+tensor factor and a new general fact, `tcp_tensor_sum_sum` (two arbitrary
+sums tensor into one sum over the pair of indices), flattening the result.
+`tcp_decompose` hands back unnormalized vectors, so each component is
+renormalized (`rprod_normalize_total`, built on one new axiom,
+`tcp_proj_vscale`) into a unit vector pair and a nonnegative scale. The
+hypothesis `qrhl_pure` is then applied to each normalized component, scaled
+back up (`pure_scaled_witness`, using `denote_scale` to push the scale
+through `⟦c⟧`/`⟦d⟧`), and the family of witnesses reassembled with
+`rcqs_sum`/`rcqs_fam` — the same machinery `Case` built. What is new beyond
+that machinery is closing the two projection equations: they cannot be
+derived directly from the per-component witnesses' own projection facts,
+because `denote_sum` additionally needs the *input* family (the scaled point
+masses fed to `qrhl_pure`) to be jointly summable, which is not otherwise in
+hand. The fix is an auxiliary point-mass family, one `rdirac` per
+(memory, decomposition-component) pair, that exists purely so
+`rcqs_projL_sum`/`rcqs_fam_projL` can be invoked on it; its own summability
+comes from the same bound the witnesses' summability needs, and it sums back
+to the original state by a `tcp_sum_sigma`-then-`tcp_sum_singleton`
+collapse. See `HANDOFF.md` §7a for the full account, including what was
+budgeted wrong (the bookkeeping needed `tcp_sum_sigma` three times over, not
+once).
 
 ### `op_ext_ket`, and what it bought
 
