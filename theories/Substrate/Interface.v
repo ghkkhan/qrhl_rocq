@@ -482,6 +482,55 @@ Module Type HILBERT_SUBSTRATE.
       hmem v (hspan (fun w => exists u, w = oapp A u)) ->
       oapp A (oapp (oadj A) v) = v.
 
+  (** A projector is the identity on its image (whose closedness is the
+      content). The companion of [oim_isometry_fix]. *)
+  Axiom oim_proj_fix : forall X (P : op X X) (v : l2 X),
+      ocomp P P = P -> oadj P = P ->
+      hmem v (hspan (fun w => exists u, w = oapp P u)) -> oapp P v = v.
+
+  (** [Meas(D, X) (x) id ⊆ Meas(D, X (x) Y)]: the measurement bound survives
+      tensoring with the identity. This is the inner-product companion of
+      [tcp_trace_meas_tensor] below; it is what lets a measurement on a
+      register be read as a measurement on the whole memory. *)
+  Axiom meas_bound_tensor :
+    forall X Y (D : Type) (M : D -> op X X),
+      (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) ->
+      (forall v : l2 X,
+          (tsum (fun z => Cre (inner v (oapp (M z) v))) <= Cre (inner v v))%R) ->
+      (forall w : l2 (X * Y),
+          summable (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))) /\
+      (forall w : l2 (X * Y),
+          (tsum (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))
+           <= Cre (inner w w))%R).
+
+  (** Totality of a projective measurement likewise survives tensoring with the
+      identity. *)
+  Axiom meas_total_tensor :
+    forall X Y (D : Type) (M : D -> op X X),
+      (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) ->
+      (forall v : l2 X,
+          tsum (fun z => Cre (inner v (oapp (M z) v))) = Cre (inner v v)) ->
+      (forall w : l2 (X * Y),
+          summable (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))) /\
+      (forall w : l2 (X * Y),
+          tsum (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))
+          = Cre (inner w w)).
+
+  (** A *total* projective measurement on the first factor is trace-preserving
+      there, so it leaves the second factor's reduced state unchanged. This is
+      what makes the right-hand projection of rule Measure1 come back
+      unchanged, and it is why the rule requires the measurement to be
+      total. *)
+  Axiom tcp_ptrace2_meas_tensor :
+    forall X Y (D : Type) (M : D -> op X X) (r : tcp (X * Y)),
+      (forall z, ocomp (M z) (M z) = M z) ->
+      (forall z, oadj (M z) = M z) ->
+      (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) ->
+      (forall v : l2 X,
+          tsum (fun z => Cre (inner v (oapp (M z) v))) = Cre (inner v v)) ->
+      tcp_ptrace2 (tcp_sum (fun z => tcp_conj (tensoro (M z) oid) r))
+      = tcp_ptrace2 r.
+
   (** Conjugation by a projector does not increase the trace. *)
   Axiom tcp_trace_conj_proj_le : forall X (A : op X X) (r : tcp X),
       ocomp A A = A -> oadj A = A ->

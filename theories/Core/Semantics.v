@@ -624,6 +624,73 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       that is the substrate's [tcp_trace_meas_tensor], transported through the
       register split. The rest of the clause follows the sampling pattern. *)
 
+  (** A projective measurement stays one after being lifted from a register to
+      the whole quantum memory. The projector conditions are
+      [wolift_projector]; the bound is the substrate's [meas_bound_tensor]
+      (resp. [meas_total_tensor]) read through the register split, which is
+      unitary and so leaves inner products alone. *)
+  Lemma olift_inner (P : qset) (A : op (qsub P) (qsub P)) (v : l2 qmem) :
+    inner v (oapp (olift P A) v)
+    = inner (oapp (oadj (Usplit P)) v)
+            (oapp (tensoro A oid) (oapp (oadj (Usplit P)) v)).
+  Proof. rewrite oapp_wolift, <- inner_oadj; reflexivity. Qed.
+
+  Lemma olift_inner_self (P : qset) (v : l2 qmem) :
+    inner (oapp (oadj (Usplit P)) v) (oapp (oadj (Usplit P)) v) = inner v v.
+  Proof. apply oisometry_inner, oisometry_oadj, Wsplit_unitary. Qed.
+
+  Lemma olift_meas (P : qset) (D : Type) (M : D -> op (qsub P) (qsub P)) :
+    is_meas M -> is_meas (fun z => olift P (M z)).
+  Proof.
+    intros [Hproj [Hsum Hbd]].
+    destruct (meas_bound_tensor (qsub P) (qsub (qneg P)) D M Hsum Hbd)
+      as [Hs Hb].
+    split; [| split ].
+    - intros z; apply (wolift_projector qvar qtype P (M z) (Hproj z)).
+    - intros v.
+      assert (Heq : (fun z => Cre (inner v (oapp (olift P (M z)) v)))
+                    = (fun z => Cre (inner (oapp (oadj (Usplit P)) v)
+                                     (oapp (tensoro (M z) oid)
+                                           (oapp (oadj (Usplit P)) v)))))
+        by (apply funext; intros z; rewrite olift_inner; reflexivity).
+      rewrite Heq; apply Hs.
+    - intros v; unfold meas_bound.
+      assert (Heq : (fun z => Cre (inner v (oapp (olift P (M z)) v)))
+                    = (fun z => Cre (inner (oapp (oadj (Usplit P)) v)
+                                     (oapp (tensoro (M z) oid)
+                                           (oapp (oadj (Usplit P)) v)))))
+        by (apply funext; intros z; rewrite olift_inner; reflexivity).
+      rewrite Heq.
+      eapply Rle_trans; [ apply (Hb (oapp (oadj (Usplit P)) v)) |].
+      apply Req_le; f_equal; apply olift_inner_self.
+  Qed.
+
+  Lemma olift_meas_total (P : qset) (D : Type)
+        (M : D -> op (qsub P) (qsub P)) :
+    is_total_meas M -> is_total_meas (fun z => olift P (M z)).
+  Proof.
+    intros [Hproj [Hsum Hbd]].
+    destruct (meas_total_tensor (qsub P) (qsub (qneg P)) D M Hsum Hbd)
+      as [Hs Hb].
+    split; [| split ].
+    - intros z; apply (wolift_projector qvar qtype P (M z) (Hproj z)).
+    - intros v.
+      assert (Heq : (fun z => Cre (inner v (oapp (olift P (M z)) v)))
+                    = (fun z => Cre (inner (oapp (oadj (Usplit P)) v)
+                                     (oapp (tensoro (M z) oid)
+                                           (oapp (oadj (Usplit P)) v)))))
+        by (apply funext; intros z; rewrite olift_inner; reflexivity).
+      rewrite Heq; apply Hs.
+    - intros v; unfold meas_bound.
+      assert (Heq : (fun z => Cre (inner v (oapp (olift P (M z)) v)))
+                    = (fun z => Cre (inner (oapp (oadj (Usplit P)) v)
+                                     (oapp (tensoro (M z) oid)
+                                           (oapp (oadj (Usplit P)) v)))))
+        by (apply funext; intros z; rewrite olift_inner; reflexivity).
+      rewrite Heq, (Hb (oapp (oadj (Usplit P)) v)).
+      f_equal; apply olift_inner_self.
+  Qed.
+
   Lemma meas_trace_bound (P : qset) (D : Type) (M : D -> op (qsub P) (qsub P))
         (rho : tcp qmem) :
     is_meas M ->

@@ -591,6 +591,15 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       | apply oisometry_tensoro_l, (wolift_isometry qvar qtype P A HA) ].
   Qed.
 
+  Lemma roliftL_projector (P : qset) (A : op (qsub P) (qsub P)) :
+    oprojector A -> oprojector (roliftL P A).
+  Proof.
+    intros HA; unfold roliftL.
+    apply oprojector_conj;
+      [ apply Urqpair_unitary
+      | apply oprojector_tensoro_l, (wolift_projector qvar qtype P A HA) ].
+  Qed.
+
   Lemma roliftR_isometry (P : qset) (A : op (qsub P) (qsub P)) :
     oisometry A -> oisometry (roliftR P A).
   Proof.

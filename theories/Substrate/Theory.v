@@ -482,6 +482,26 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     rewrite <- oapp_ocomp, H1, oapp_oid; reflexivity.
   Qed.
 
+  Lemma oprojector_tensoro_l {X Y} (A : op X X) :
+    oprojector A -> oprojector (@tensoro X X Y Y A oid).
+  Proof.
+    intros [H1 H2]; split.
+    - rewrite <- tensoro_ocomp, H1, ocomp_oid_l; reflexivity.
+    - rewrite tensoro_oadj, oadj_oid, H2; reflexivity.
+  Qed.
+
+  (** Conjugating a projector by a unitary gives a projector. *)
+  Lemma oprojector_conj {X Y} (W : op X Y) (A : op Y Y) :
+    ounitary W -> oprojector A -> oprojector (ocomp (oadj W) (ocomp A W)).
+  Proof.
+    intros [H1 H2] [HA1 HA2]; split.
+    - apply op_ext; intros v.
+      rewrite !oapp_ocomp.
+      rewrite <- (oapp_ocomp _ _ _ W (oadj W)), H2, oapp_oid.
+      rewrite <- (oapp_ocomp _ _ _ A A), HA1; reflexivity.
+    - rewrite !oadj_ocomp, oadj_invol, HA2, ocomp_assoc; reflexivity.
+  Qed.
+
   Lemma oisometry_oadj {X Y} (W : op X Y) : ounitary W -> oisometry (oadj W).
   Proof. intros [H1 H2]; unfold oisometry; rewrite oadj_invol; exact H2. Qed.
 
@@ -557,6 +577,42 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply himg_le; intros v Hv.
     apply hmem_hmeet in Hv; destruct Hv as [HvS HvIm].
     rewrite oapp_ocomp, (oim_isometry_fix _ _ A v HA HvIm); exact HvS.
+  Qed.
+
+  Lemma himg_hjoin_le {X Y} (A : op X Y) (S T : hspace X) :
+    himg A (hjoin S T) <=h hjoin (himg A S) (himg A T).
+  Proof.
+    apply himg_le_via_preim, hjoin_lub; intros v Hv; apply hmem_hpreim.
+    - apply hjoin_lel, hmem_himg, Hv.
+    - apply hjoin_ler, hmem_himg, Hv.
+  Qed.
+
+  (** A projector annihilates the orthocomplement of its image. *)
+  Lemma oproj_kills_ocompl {X} (P : op X X) (v : l2 X) :
+    oprojector P -> hmem v (hocompl (oim P)) -> oapp P v = vzero.
+  Proof.
+    intros [H1 H2] Hv; apply inner_definite.
+    (* <Pv, Pv> = <v, P P v> = <v, P v> = 0, the last because v _|_ im P *)
+    transitivity (inner v (oapp P v)).
+    - rewrite <- H2 at 1.
+      rewrite inner_oadj, <- oapp_ocomp, H1; reflexivity.
+    - apply inner_eq0_sym.
+      apply (proj1 (hmem_hocompl _ _ _) Hv), hmem_oim.
+  Qed.
+
+  (** The step that makes rule Measure1's precondition work: applying a
+      projector to [(S cap im P) + (im P)^perp] lands inside [S]. *)
+  Lemma himg_proj_meet_oim {X} (P : op X X) (S : hspace X) :
+    oprojector P -> himg P (hjoin (hmeet S (oim P)) (hocompl (oim P))) <=h S.
+  Proof.
+    intros HP.
+    eapply hle_trans; [ apply himg_hjoin_le |].
+    apply hjoin_lub.
+    - apply himg_le; intros v Hv.
+      apply hmem_hmeet in Hv; destruct Hv as [HvS HvIm].
+      rewrite (oim_proj_fix _ P v (proj1 HP) (proj2 HP) HvIm); exact HvS.
+    - apply himg_le; intros v Hv.
+      rewrite (oproj_kills_ocompl P v HP Hv); apply hmem_vzero.
   Qed.
 
   Lemma himg_hbot {X Y} (A : op X Y) : himg A hbot = hbot.

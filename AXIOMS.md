@@ -272,6 +272,10 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_conj_sum` | `forall X Y J (A : op X Y) (F : J -> tcp X), tcp_summable F -> tcp_conj A (tcp_sum F) = tcp_sum (fun j => tcp_conj A (F j))` |
 | Axiom | `tcp_supp_conj` | `forall X Y (A : op X Y) (r : tcp X), tcp_supp (tcp_conj A r) = hspan (fun w => exists v, hmem v (tcp_supp r) /\ w = oapp A v)` |
 | Axiom | `oim_isometry_fix` | `forall X Y (A : op X Y) (v : l2 Y), ocomp (oadj A) A = oid -> hmem v (hspan (fun w => exists u, w = oapp A u)) -> oapp A (oapp (oadj A) v) = v` |
+| Axiom | `oim_proj_fix` | `forall X (P : op X X) (v : l2 X), ocomp P P = P -> oadj P = P -> hmem v (hspan (fun w => exists u, w = oapp P u)) -> oapp P v = v` |
+| Axiom | `meas_bound_tensor` | `forall X Y (D : Type) (M : D -> op X X), (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) -> (forall v : l2 X, (tsum (fun z => Cre (inner v (oapp (M z) v))) <= Cre (inner v v))%R) -> (forall w : l2 (X * Y), summable (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))) /\ (forall w : l2 (X * Y), (tsum (fun z => Cre (inner w (oapp (tensoro (M z) oid) w))) <= Cre (inner w w))%R)` |
+| Axiom | `meas_total_tensor` | `forall X Y (D : Type) (M : D -> op X X), (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) -> (forall v : l2 X, tsum (fun z => Cre (inner v (oapp (M z) v))) = Cre (inner v v)) -> (forall w : l2 (X * Y), summable (fun z => Cre (inner w (oapp (tensoro (M z) oid) w)))) /\ (forall w : l2 (X * Y), tsum (fun z => Cre (inner w (oapp (tensoro (M z) oid) w))) = Cre (inner w w))` |
+| Axiom | `tcp_ptrace2_meas_tensor` | `forall X Y (D : Type) (M : D -> op X X) (r : tcp (X * Y)), (forall z, ocomp (M z) (M z) = M z) -> (forall z, oadj (M z) = M z) -> (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) -> (forall v : l2 X, tsum (fun z => Cre (inner v (oapp (M z) v))) = Cre (inner v v)) -> tcp_ptrace2 (tcp_sum (fun z => tcp_conj (tensoro (M z) oid) r)) = tcp_ptrace2 r` |
 | Axiom | `tcp_trace_conj_proj_le` | `forall X (A : op X X) (r : tcp X), ocomp A A = A -> oadj A = A -> (tcp_trace (tcp_conj A r) <= tcp_trace r)%R` |
 | Axiom | `tcp_trace_meas_tensor` | `forall X Y (D : Type) (M : D -> op X X) (r : tcp (X * Y)), (forall z, ocomp (M z) (M z) = M z) -> (forall z, oadj (M z) = M z) -> (forall v : l2 X, summable (fun z => Cre (inner v (oapp (M z) v)))) -> (forall v : l2 X, (tsum (fun z => Cre (inner v (oapp (M z) v))) <= Cre (inner v v))%R) -> summable (fun z => tcp_trace (tcp_conj (tensoro (M z) oid) r)) /\ (tsum (fun z => tcp_trace (tcp_conj (tensoro (M z) oid) r)) <= tcp_trace r)%R` |
 | Axiom | `tcp_trace_conj_isometry` | `forall X Y (A : op X Y) (r : tcp X), ocomp (oadj A) A = oid -> tcp_trace (tcp_conj A r) = tcp_trace r` |
@@ -309,6 +313,6 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_supp_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_supp (tcp_sum F) = hSup (fun j => tcp_supp (F j))` |
 | Axiom | `tcp_decompose` | `forall X (r : tcp X), exists (J : Type) (psi : J -> l2 X), tcp_summable (fun j => tcp_proj (psi j)) /\ r = tcp_sum (fun j => tcp_proj (psi j))` |
 
-**Totals: 44 parameters, 120 axioms.**
+**Totals: 44 parameters, 124 axioms.**
 
 <!-- END GENERATED INVENTORY -->

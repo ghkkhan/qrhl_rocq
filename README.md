@@ -79,8 +79,8 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
-| 1d | `Skip` `Conseq` `Seq` `QApply1` `Assign1` `If1` `JointIf` `Sample1` | **done** |
-| 1d | the other 5 vertical-slice rules | in progress, see below |
+| 1d | `Skip` `Conseq` `Seq` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
+| 1d | the other 4 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
@@ -106,7 +106,7 @@ to end: `Registers.v` now has one-sided lifts `roliftL`/`roliftR` with the two
 facts every one-sided rule needs — the left projection sees the action, the
 right one does not — and `Rules/Quantum.v` factors the shared
 well-formedness/separability/projection reasoning into a `OneSided` section
-that `QInit1` and `Measure1` will reuse.
+that `QInit1` reuses.
 
 One design decision is worth knowing. A one-sided lift is **defined** by
 conjugating through `Urqpair` and acting on a tensor factor, rather than as
@@ -138,6 +138,20 @@ is exactly why the right-hand projection comes back unchanged.
 loop-free programs, which is what lets a state be split and the pieces
 recombined.
 
+`Measure1` completes the family of one-sided rules. Its shape is `Sample1`'s
+with a conjugation by the outcome's projector where the subdistribution's
+weight was, so it reuses `rbeta` verbatim; what is new is the two ends. On the
+postcondition side, the paper's `(B{z/x₁} ∩ im e′_z) + (im e′_z)^⊥` works
+because a projector is the identity on its image and kills the
+orthocomplement, so its image of that join lands in `B` — proved as
+`himg_proj_meet_oim`, with only "a projector fixes its image" assumed. On the
+right-hand projection, totality of the measurement is exactly what is needed
+and exactly what the paper's `Cla[idx₁ e is a total measurement]` supplies: a
+total measurement is trace-preserving, so the other side's reduced state does
+not move. Both the bound and its equality case have to be carried from the
+register to the whole memory first (`olift_meas`, `olift_meas_total`), which
+is where `meas_bound_tensor` and `meas_total_tensor` are used.
+
 Still to do in Phase 1d, with what each actually needs (established, not
 guessed):
 
@@ -145,11 +159,13 @@ guessed):
 |---|---|
 | ~~`If1`, `JointIf`~~ | **done** — needed no new axioms |
 | ~~`Sample1`~~ | **done** |
+| ~~`Measure1`~~ | **done** — four textbook axioms: a projector fixes its image, `Meas(D,X)⊗id ⊆ Meas(D,X⊗Y)` (bounded and total forms), and that a total measurement on one factor leaves the other factor's reduced state alone |
 | `Case` | `denote` **normality** (`⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ`), not just additivity: the case split is over an arbitrary result type, not two branches |
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
-| `Measure1`, `JointMeasureSimple` | per-outcome witnesses reassembled; same machinery as Lemma 36's converse |
+| `JointSample` | a two-sided reindexing: the witness updates `x₁` and `y₂` together along a coupling, so `rbeta` has to be replaced by its joint analogue |
+| `JointMeasureSimple` | the same, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
 
-`If1` is the cheapest of these and is the natural next one.
+`Case` is the natural next one: it also unblocks the converse of Lemma 36.
 
 ### Two smaller gaps in §4.4
 

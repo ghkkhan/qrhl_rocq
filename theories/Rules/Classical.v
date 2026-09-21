@@ -47,34 +47,8 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                    if excluded_middle_informative (acond x e (csel SL rm) a)
                    then r (rcupd rm (SL, x) a) else tcp_zero).
 
-    (* --------------------------------------------------------------- *)
-    (** *** The reindexing
-
-        [(rm, a) |-> (rm with x_1 := a, the old x_1)], an involution. *)
-
-    Definition rbeta (p : rcmem * ctype x) : rcmem * ctype x :=
-      (rcupd (fst p) (SL, x) (snd p), csel SL (fst p) x).
-
-    Lemma rbeta_invol (p : rcmem * ctype x) : rbeta (rbeta p) = p.
-    Proof.
-      destruct p as [rm a]; unfold rbeta; cbn [fst snd].
-      rewrite rcupd_rcupd_L, rcupd_id_L, csel_rcupd_L, cupd_same; reflexivity.
-    Qed.
-
-    Lemma rbeta_inj (p q : rcmem * ctype x) : rbeta p = rbeta q -> p = q.
-    Proof.
-      intros H; rewrite <- (rbeta_invol p), <- (rbeta_invol q), H; reflexivity.
-    Qed.
-
-    Lemma rcupd_inj (rm : rcmem) (a b : ctype x) :
-      rcupd rm (SL, x) a = rcupd rm (SL, x) b -> a = b.
-    Proof.
-      intros Hab.
-      assert (H : csel SL (rcupd rm (SL, x) a) x
-                  = csel SL (rcupd rm (SL, x) b) x)
-        by (rewrite Hab; reflexivity).
-      rewrite !csel_rcupd_L, !cupd_same in H; exact H.
-    Qed.
+    (** The reindexing [rbeta] and the injectivity of [rcupd] live in
+        [Core/Judgment.v]; every one-sided rule uses them. *)
 
     (* --------------------------------------------------------------- *)
     (** *** Summability at a fixed target, and the trace formula *)
@@ -90,7 +64,7 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                                 tcp_trace (r (rcupd rm (SL, x) a)))).
       - apply (summable_inj (fun a : ctype x => rcupd rm (SL, x) a)
                             (fun rm' => tcp_trace (r rm')));
-          [ apply rcupd_inj | apply tcp_summable_trace; exact Hr ].
+          [ apply (rcupd_inj x rm) | apply tcp_summable_trace; exact Hr ].
       - intros a;
           destruct (excluded_middle_informative (acond x e (csel SL rm) a));
           [ apply Rle_refl | rewrite tcp_trace_zero; apply tcp_trace_nonneg ].
@@ -127,7 +101,7 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                       then tcp_trace (r rm') else 0%R).
       assert (HGH : (fun p : rcmem * ctype x => Ga (fst p) (snd p))
                     = (fun p : rcmem * ctype x =>
-                         Hsrc (fst (rbeta p)) (snd (rbeta p)))).
+                         Hsrc (fst (rbeta x p)) (snd (rbeta x p)))).
       { apply funext; intros p; unfold Ga, Hsrc, rbeta, acond; cbn [fst snd].
         rewrite csel_rcupd_L; reflexivity. }
       assert (HsrcS : forall rm', summable (Hsrc rm'))
@@ -145,9 +119,9 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       destruct (tsum_pairs_le_iter Hsrc HsrcS HsrcIt) as [HsrcPS _].
       assert (HGS : summable (fun p : rcmem * ctype x => Ga (fst p) (snd p))).
       { rewrite HGH.
-        apply (summable_inj rbeta
+        apply (summable_inj (rbeta x)
                  (fun q : rcmem * ctype x => Hsrc (fst q) (snd q)));
-          [ apply rbeta_inj | exact HsrcPS ]. }
+          [ apply (rbeta_inj x) | exact HsrcPS ]. }
       assert (HGpos : nonneg (fun p : rcmem * ctype x => Ga (fst p) (snd p))).
       { intros p; unfold Ga.
         destruct (excluded_middle_informative

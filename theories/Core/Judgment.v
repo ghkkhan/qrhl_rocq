@@ -117,6 +117,35 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       rewrite HFt, HFf; reflexivity.
   Qed.
 
+  (** Acting on one tensor factor sends a sum of products to a sum of
+      products. The hypothesis is only needed to keep the family summable, so
+      it is stated as the trace bound rather than as isometry or projectivity;
+      both of the rules that use this supply it. *)
+  Lemma tcp_sep_conj_tensorL {X Y} (A : op X X) (r : tcp (X * Y)) :
+    (forall s : tcp X, (tcp_trace (tcp_conj A s) <= tcp_trace s)%R) ->
+    tcp_sep r -> tcp_sep (tcp_conj (tensoro A oid) r).
+  Proof.
+    intros Hbd [J [f [g [Hs Heq]]]].
+    exists J, (fun j => tcp_conj A (f j)), g; split.
+    - apply tcp_summable_trace.
+      apply (summable_mono _ (fun j => tcp_trace (tcp_tensor (f j) (g j)))).
+      + apply tcp_summable_trace; exact Hs.
+      + intros j; rewrite !tcp_trace_tensor.
+        apply Rmult_le_compat_r; [ apply tcp_trace_nonneg | apply Hbd ].
+    - rewrite Heq, (tcp_conj_sum _ _ _ _ _ Hs).
+      f_equal; apply funext; intros j.
+      rewrite tcp_conj_tensor, tcp_conj_oid; reflexivity.
+  Qed.
+
+  Lemma rsep_roliftL (P : qset) (A : op (qsub P) (qsub P)) (r : tcp rqmem) :
+    (forall s : tcp qmem,
+        (tcp_trace (tcp_conj (olift P A) s) <= tcp_trace s)%R) ->
+    rsep r -> rsep (tcp_conj (roliftL P A) r).
+  Proof.
+    intros Hbd Hr; unfold rsep; rewrite conj_roliftL.
+    apply tcp_sep_conj_tensorL; assumption.
+  Qed.
+
   Lemma tcp_sep_scale {X Y} (a : R) (r : tcp (X * Y)) :
     tcp_sep r -> tcp_sep (tcp_scale a r).
   Proof.
@@ -134,6 +163,45 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         apply Rmult_le_compat_r; [ apply tcp_trace_nonneg | apply Rle_abs ].
     - rewrite Hr, (tcp_scale_sum _ _ _ _ Hs).
       f_equal; apply funext; intros j; apply tcp_scale_tensor_l.
+  Qed.
+
+  (* ================================================================= *)
+  (* ================================================================= *)
+  (** ** The one-sided reindexing
+
+      [(rm, a) |-> (rm with x_1 := a, the old x_1)], the relational
+      counterpart of [sbeta] in [Semantics.v], and an involution for the same
+      reason. Every rule whose statement updates a classical variable on one
+      side -- Assign1, Sample1, Measure1 -- reindexes its double sum with it:
+      the pair (target memory, summation index) is in bijection with (source
+      memory, the target's old value of [x]), and it is only after that
+      reindexing that the sum collapses. *)
+
+  Definition rbeta (x : cvar) (p : rcmem * ctype x) : rcmem * ctype x :=
+    (rcupd (fst p) (SL, x) (snd p), csel SL (fst p) x).
+
+  Lemma rbeta_invol (x : cvar) (p : rcmem * ctype x) :
+    rbeta x (rbeta x p) = p.
+  Proof.
+    destruct p as [rm a]; unfold rbeta; cbn [fst snd].
+    rewrite rcupd_rcupd_L, rcupd_id_L, csel_rcupd_L, cupd_same; reflexivity.
+  Qed.
+
+  Lemma rbeta_inj (x : cvar) (p q : rcmem * ctype x) :
+    rbeta x p = rbeta x q -> p = q.
+  Proof.
+    intros H; rewrite <- (rbeta_invol x p), <- (rbeta_invol x q), H;
+      reflexivity.
+  Qed.
+
+  Lemma rcupd_inj (x : cvar) (rm : rcmem) (a b : ctype x) :
+    rcupd rm (SL, x) a = rcupd rm (SL, x) b -> a = b.
+  Proof.
+    intros Hab.
+    assert (H : csel SL (rcupd rm (SL, x) a) x
+                = csel SL (rcupd rm (SL, x) b) x)
+      by (rewrite Hab; reflexivity).
+    rewrite !csel_rcupd_L, !cupd_same in H; exact H.
   Qed.
 
   (* ================================================================= *)
