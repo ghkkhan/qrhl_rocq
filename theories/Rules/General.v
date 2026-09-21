@@ -189,11 +189,11 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   Theorem rule_Case (Z : Type) (e : rexpr Z) (A B : pred) (c d : prog) :
-    wt c -> loopfree c -> wt d -> loopfree d ->
+    wt c -> wt d ->
     (forall z : Z, qrhl (pmeet (Cla (case_guard e z)) A) c d B) ->
     qrhl A c d B.
   Proof.
-    intros Hwtc Hlfc Hwtd Hlfd H r Hwf Hsep Hsat.
+    intros Hwtc Hwtd H r Hwf Hsep Hsat.
     pose (rz := case_part e r).
     assert (Hfamz : rcqs_fam rz) by (apply case_part_fam; exact Hwf).
     assert (Hwfz : forall z, rcqs_wf (rz z)) by (apply rcqs_fam_wf; exact Hfamz).
@@ -225,7 +225,7 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     { intros z.
       rewrite <- (rcqs_trace_projL (r' z) (Hwf' z)),
               <- (rcqs_trace_projL (rz z) (Hwfz z)), (HL z).
-      apply (proj2 (denote_wf_trace c Hwtc Hlfc _
+      apply (proj2 (denote_wf_trace c Hwtc _
                       (rcqs_projL_wf _ (Hwfz z)))). }
     assert (Hfam' : rcqs_fam r').
     { unfold rcqs_fam.
@@ -243,7 +243,7 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                     = (fun z => denote c (rcqs_projL (rz z))))
         by (apply funext; exact HL).
       rewrite Heq.
-      rewrite <- (denote_sum c Hwtc Hlfc Z _ (rcqs_fam_projL rz Hfamz)).
+      rewrite <- (denote_sum c Hwtc Z _ (rcqs_fam_projL rz Hfamz)).
       rewrite <- (rcqs_projL_sum rz Hfamz).
       unfold rz; rewrite case_part_sum; reflexivity.
     - rewrite (rcqs_projR_sum r' Hfam').
@@ -251,7 +251,7 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                     = (fun z => denote d (rcqs_projR (rz z))))
         by (apply funext; exact HR).
       rewrite Heq.
-      rewrite <- (denote_sum d Hwtd Hlfd Z _ (rcqs_fam_projR rz Hfamz)).
+      rewrite <- (denote_sum d Hwtd Z _ (rcqs_fam_projR rz Hfamz)).
       rewrite <- (rcqs_projR_sum rz Hfamz).
       unfold rz; rewrite case_part_sum; reflexivity.
   Qed.

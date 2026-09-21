@@ -861,158 +861,22 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       bounded by the initial trace -- which belongs with rules While1 and
       JointWhile in Phase 2. *)
 
-  Theorem denote_wf_trace (c : prog) :
-    wt c -> loopfree c ->
-    forall r, cqs_wf r ->
-      cqs_wf (denote c r) /\ (cqs_trace (denote c r) <= cqs_trace r)%R.
-  Proof.
-    induction c as [ | x e | x e | e c1 IH1 c2 IH2 | e c1 IH1
-                   | c1 IH1 c2 IH2 | Pq e | Pq e | x Pq e ];
-      intros Hwt Hlf r Hr; cbn [denote] in *.
-    - (* Skip *) split; [ exact Hr | apply Rle_refl ].
-    - (* Assign *) apply sem_assign_wf_trace; exact Hr.
-    - (* Sample *) apply sem_sample_wf_trace; exact Hr.
-    - (* Cond *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
-      destruct (IH1 Hwt1 Hlf1 (restr e r) (restr_wf e r Hr)) as [Hw1 Hb1].
-      destruct (IH2 Hwt2 Hlf2 (restrn e r) (restrn_wf e r Hr)) as [Hw2 Hb2].
-      split.
-      + apply cqs_add_wf; assumption.
-      + rewrite (cqs_trace_add _ _ Hw1 Hw2).
-        rewrite <- (cqs_trace_restr_split e r Hr).
-        apply Rplus_le_compat; assumption.
-    - (* While: excluded by [loopfree] *)
-      cbn [loopfree] in Hlf; destruct Hlf.
-    - (* Seq *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
-      destruct (IH1 Hwt1 Hlf1 r Hr) as [Hw1 Hb1].
-      destruct (IH2 Hwt2 Hlf2 _ Hw1) as [Hw2 Hb2].
-      split; [ exact Hw2 | eapply Rle_trans; eassumption ].
-    - (* QInit *)
-      cbn [wt] in Hwt.
-      destruct (wf_trace_of_pointwise (sem_qinit Pq e r) r
-                  (fun m => sem_qinit_trace_pt Pq e r m (Hwt m)) Hr) as [Hw Hb].
-      split; [ exact Hw | rewrite Hb; apply Rle_refl ].
-    - (* QApply *)
-      cbn [wt] in Hwt.
-      destruct (wf_trace_of_pointwise (sem_qapply Pq e r) r
-                  (fun m => sem_qapply_trace_pt Pq e r m (Hwt m)) Hr) as [Hw Hb].
-      split; [ exact Hw | rewrite Hb; apply Rle_refl ].
-    - (* Measure *)
-      cbn [wt] in Hwt.
-      apply sem_measure_wf_trace; [ exact Hwt | exact Hr ].
-  Qed.
+  (* ----------------------------------------------------------------- *)
+  (** *** Loops
 
-  Corollary denote_wf (c : prog) :
-    wt c -> loopfree c -> forall r, cqs_wf r -> cqs_wf (denote c r).
-  Proof. intros Hwt Hlf r Hr; apply (denote_wf_trace c Hwt Hlf r Hr). Qed.
+      [[while e do c]](rho) = sum_i down_{~e} (([[c]] o down_e)^i rho): the
+      state at the top of iteration [i], filtered by the negated guard, summed
+      over all iteration counts. The trace bound is therefore not one
+      application of the body's bound but a telescoping estimate.
 
-  (* ================================================================= *)
-  (** ** [[c]] is additive
-
-      A cq-superoperator is in particular additive on the positive cone. This
-      is what lets a state be split -- by the value of a classical expression,
-      or into its pure components -- and the pieces recombined afterwards, so
-      it is a prerequisite for rules Case and If1 and for the converse of
-      Lemma 36.
-
-      Proved for loop-free programs, for the same reason as
-      [denote_wf_trace]. *)
-
-  Lemma restr_add (e : expr bool) (r s : cqs) :
-    restr e (cqs_add r s) = cqs_add (restr e r) (restr e s).
-  Proof.
-    apply funext; intros m; unfold restr, cqs_add.
-    destruct (ev e m); [ reflexivity | symmetry; apply tcp_add_zero ].
-  Qed.
-
-  Lemma restrn_add (e : expr bool) (r s : cqs) :
-    restrn e (cqs_add r s) = cqs_add (restrn e r) (restrn e s).
-  Proof.
-    apply funext; intros m; unfold restrn, cqs_add.
-    destruct (ev e m); [ symmetry; apply tcp_add_zero | reflexivity ].
-  Qed.
-
-  Lemma cqs_add_assoc4 (a b c d : cqs) :
-    cqs_add (cqs_add a b) (cqs_add c d)
-    = cqs_add (cqs_add a c) (cqs_add b d).
-  Proof.
-    apply funext; intros m; unfold cqs_add.
-    rewrite <- !tcp_add_assoc; f_equal.
-    rewrite !tcp_add_assoc; f_equal; apply tcp_add_comm.
-  Qed.
-
-  Theorem denote_add (c : prog) :
-    wt c -> loopfree c ->
-    forall r s, cqs_wf r -> cqs_wf s ->
-      denote c (cqs_add r s) = cqs_add (denote c r) (denote c s).
-  Proof.
-    induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
-                   | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
-      intros Hwt Hlf r s Hr Hs; cbn [denote] in *.
-    - (* Skip *) reflexivity.
-    - (* Assign *)
-      apply funext; intros m'; unfold sem_assign, cqs_add.
-      rewrite <- (tcp_sum_add _ _ _ _ (assign_inner_wf y e r m' Hr)
-                                     (assign_inner_wf y e s m' Hs)).
-      f_equal; apply funext; intros a.
-      destruct (excluded_middle_informative (acond y e m' a));
-        [ reflexivity | symmetry; apply tcp_add_zero ].
-    - (* Sample *)
-      apply funext; intros m'; unfold sem_sample, cqs_add.
-      rewrite <- (tcp_sum_add _ _ _ _ (sample_inner_wf y e r m' Hr)
-                                     (sample_inner_wf y e s m' Hs)).
-      f_equal; apply funext; intros a; apply tcp_scale_add.
-    - (* Cond *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
-      rewrite restr_add, restrn_add.
-      rewrite (IH1 Hwt1 Hlf1 _ _ (restr_wf e r Hr) (restr_wf e s Hs)).
-      rewrite (IH2 Hwt2 Hlf2 _ _ (restrn_wf e r Hr) (restrn_wf e s Hs)).
-      apply cqs_add_assoc4.
-    - (* While: excluded *)
-      cbn [loopfree] in Hlf; destruct Hlf.
-    - (* Seq *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
-      rewrite (IH1 Hwt1 Hlf1 _ _ Hr Hs).
-      apply (IH2 Hwt2 Hlf2);
-        apply (denote_wf c1 Hwt1 Hlf1); assumption.
-    - (* QInit *)
-      apply funext; intros m; unfold sem_qinit, cqs_add.
-      rewrite tcp_conj_add, tcp_ptraceL_add, tcp_tensor_add_r, tcp_conj_add;
-        reflexivity.
-    - (* QApply *)
-      apply funext; intros m; unfold sem_qapply, cqs_add; apply tcp_conj_add.
-    - (* Measure *)
-      apply funext; intros m'; unfold sem_measure, cqs_add.
-      cbn [wt] in Hwt.
-      transitivity
-        (tcp_sum (fun a : ctype y =>
-           tcp_add (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
-                             (r (cupd m' y a)))
-                   (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
-                             (s (cupd m' y a))))).
-      { f_equal; apply funext; intros a; apply tcp_conj_add. }
-      apply (tcp_sum_add _ _ _ _
-               (measure_inner_wf y Pq e Hwt r m' Hr)
-               (measure_inner_wf y Pq e Hwt s m' Hs)).
-  Qed.
-
-  (* ================================================================= *)
-  (** ** Normality of [[c]]
-
-      [denote_add] says [[c]] is additive; rule Case (Lemma 48) needs the same
-      for a family indexed by an arbitrary type, because the case split is
-      over the values of a classical expression rather than over two branches.
-      The converse of Lemma 36 needs it for the same reason.
-
-      The clauses that have a sum of their own -- assignment, sampling,
-      measurement -- are the interesting ones: there the two sums have to be
-      exchanged, which is [tcp_sum_swap] and so needs all four of its
-      summability side conditions. *)
+      Write [t i] for the trace at the top of iteration [i] and [a i] for the
+      trace of what exits there. Splitting by the guard gives
+      [t i = tr(down_e rho_i) + a i], and the body does not increase the
+      trace, so [a i + t (i+1) <= t i]. Summing the first [n] of those
+      telescopes to [sum_{i<n} a i + t n <= t 0]: all the exits together weigh
+      no more than the state we started with. Since every duplicate-free list
+      of iteration counts sits inside an initial segment, that bounds the
+      unordered sum as well. *)
 
   (** A summable family of cq-states. The single condition is joint
       summability of the traces over (index, memory); every pointwise and
@@ -1088,21 +952,20 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       [ rewrite tcp_trace_zero; apply tcp_trace_nonneg | apply Rle_refl ].
   Qed.
 
-  Lemma cqs_fam_denote {J} (F : J -> cqs) (c : prog) :
-    wt c -> loopfree c -> cqs_fam F -> cqs_fam (fun j => denote c (F j)).
+  Lemma restr_add (e : expr bool) (r s : cqs) :
+    restr e (cqs_add r s) = cqs_add (restr e r) (restr e s).
   Proof.
-    intros Hwt Hlf H; unfold cqs_fam.
-    refine (proj1 (tsum_pairs_le_iter
-                     (fun (j : J) (m : cmem) => tcp_trace (denote c (F j) m))
-                     _ _)).
-    - intros j; apply tcp_summable_trace.
-      apply (denote_wf c Hwt Hlf), (cqs_fam_wf F H j).
-    - apply (summable_mono _ (fun j => cqs_trace (F j)));
-        [ apply cqs_fam_trace; exact H |].
-      intros j; apply (proj2 (denote_wf_trace c Hwt Hlf _ (cqs_fam_wf F H j))).
+    apply funext; intros m; unfold restr, cqs_add.
+    destruct (ev e m); [ reflexivity | symmetry; apply tcp_add_zero ].
   Qed.
 
-  (** Sums of families, pointwise. *)
+  Lemma restrn_add (e : expr bool) (r s : cqs) :
+    restrn e (cqs_add r s) = cqs_add (restrn e r) (restrn e s).
+  Proof.
+    apply funext; intros m; unfold restrn, cqs_add.
+    destruct (ev e m); [ symmetry; apply tcp_add_zero | reflexivity ].
+  Qed.
+
   Lemma cqs_sum_add {J} (A B : J -> cqs) :
     cqs_fam A -> cqs_fam B ->
     cqs_add (cqs_sum A) (cqs_sum B) = cqs_sum (fun j => cqs_add (A j) (B j)).
@@ -1129,14 +992,389 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       [ symmetry; apply tcp_sum_zero; intros; reflexivity | reflexivity ].
   Qed.
 
+  Lemma cqs_trace_sum {J} (F : J -> cqs) :
+    cqs_fam F -> cqs_trace (cqs_sum F) = tsum (fun j => cqs_trace (F j)).
+  Proof.
+    intros H; unfold cqs_trace, cqs_sum.
+    assert (Heq : (fun m : cmem => tcp_trace (tcp_sum (fun j => F j m)))
+                  = (fun m : cmem => tsum (fun j => tcp_trace (F j m))))
+      by (apply funext; intros m;
+          apply (tcp_trace_sum _ _ _ (cqs_fam_ptwise F H m))).
+    rewrite Heq.
+    assert (Hmj : summable (fun q : cmem * J => tcp_trace (F (snd q) (fst q)))).
+    { apply (summable_inj (fun q : cmem * J => (snd q, fst q))
+                          (fun p : J * cmem => tcp_trace (F (fst p) (snd p))));
+        [ intros [a b] [x y] Hq; cbn in Hq; congruence | exact H ]. }
+    destruct (tsum_iter_le_pairs (fun (m : cmem) (j : J) => tcp_trace (F j m))
+                (fun q => tcp_trace_nonneg _ _) Hmj) as [Hit _].
+    destruct (tsum_tonelli (fun (m : cmem) (j : J) => tcp_trace (F j m))
+                (fun m j => tcp_trace_nonneg _ _)
+                (fun m => proj1 (tcp_summable_trace _ _ _)
+                            (cqs_fam_ptwise F H m))
+                Hit) as [_ E1].
+    destruct (tsum_tonelli (fun (j : J) (m : cmem) => tcp_trace (F j m))
+                (fun j m => tcp_trace_nonneg _ _)
+                (fun j => proj1 (tcp_summable_trace _ _ _) (cqs_fam_wf F H j))
+                (cqs_fam_trace F H)) as [_ E2].
+    rewrite <- E1, <- E2.
+    apply (tsum_swap_pair
+             (fun p : J * cmem => tcp_trace (F (fst p) (snd p)))), H.
+  Qed.
+
+  Section While.
+    Context (e : expr bool) (F : cqs -> cqs)
+            (HF : forall r, cqs_wf r ->
+                   cqs_wf (F r) /\ (cqs_trace (F r) <= cqs_trace r)%R).
+
+    Definition witer (r : cqs) (i : nat) : cqs :=
+      Nat.iter i (fun s => F (restr e s)) r.
+
+    Lemma witer_wf (r : cqs) (i : nat) : cqs_wf r -> cqs_wf (witer r i).
+    Proof.
+      intros Hr; induction i as [| n IH]; [ exact Hr |].
+      apply HF, restr_wf, IH.
+    Qed.
+
+    Lemma witer_step (r : cqs) (i : nat) :
+      cqs_wf r ->
+      (cqs_trace (restrn e (witer r i)) + cqs_trace (witer r (S i))
+       <= cqs_trace (witer r i))%R.
+    Proof.
+      intros Hr.
+      assert (Hw : cqs_wf (witer r i)) by (apply witer_wf; exact Hr).
+      pose proof (cqs_trace_restr_split e (witer r i) Hw) as Hsplit.
+      assert (Hb : (cqs_trace (witer r (S i))
+                    <= cqs_trace (restr e (witer r i)))%R)
+        by (apply HF, restr_wf, Hw).
+      lra.
+    Qed.
+
+    Lemma witer_telescope (r : cqs) (n : nat) :
+      cqs_wf r ->
+      (lsum (fun i => cqs_trace (restrn e (witer r i))) (seq 0 n)
+       + cqs_trace (witer r n) <= cqs_trace r)%R.
+    Proof.
+      intros Hr; induction n as [| n IH]; [ cbn; lra |].
+      rewrite seq_S, lsum_app; cbn [lsum].
+      pose proof (witer_step r n Hr) as Hstep.
+      replace (0 + n)%nat with n by apply Nat.add_0_l.
+      lra.
+    Qed.
+
+    Lemma witer_summable (r : cqs) :
+      cqs_wf r ->
+      summable (fun i : nat => cqs_trace (restrn e (witer r i)))
+      /\ (tsum (fun i : nat => cqs_trace (restrn e (witer r i)))
+          <= cqs_trace r)%R.
+    Proof.
+      intros Hr.
+      apply (nat_summable_of_seq
+               (fun i : nat => cqs_trace (restrn e (witer r i)))
+               (cqs_trace r) (fun i => cqs_trace_nonneg _)).
+      intros n; pose proof (witer_telescope r n Hr);
+        pose proof (cqs_trace_nonneg (witer r n)); lra.
+    Qed.
+
+    Lemma witer_fam (r : cqs) :
+      cqs_wf r -> cqs_fam (fun i : nat => restrn e (witer r i)).
+    Proof.
+      intros Hr; unfold cqs_fam.
+      refine (proj1 (tsum_pairs_le_iter
+                       (fun (i : nat) (m : cmem) =>
+                          tcp_trace (restrn e (witer r i) m)) _ _)).
+      - intros i; apply tcp_summable_trace, restrn_wf, witer_wf; exact Hr.
+      - apply (proj1 (witer_summable r Hr)).
+    Qed.
+
+    Lemma sem_while_sum (r : cqs) :
+      sem_while e F r = cqs_sum (fun i : nat => restrn e (witer r i)).
+    Proof. reflexivity. Qed.
+
+    Lemma sem_while_wf_trace (r : cqs) :
+      cqs_wf r ->
+      cqs_wf (sem_while e F r)
+      /\ (cqs_trace (sem_while e F r) <= cqs_trace r)%R.
+    Proof.
+      intros Hr.
+      pose proof (witer_fam r Hr) as Hfam.
+      rewrite sem_while_sum.
+      split; [ apply cqs_fam_sum_wf; exact Hfam
+             | rewrite (cqs_trace_sum _ Hfam);
+               apply (proj2 (witer_summable r Hr)) ].
+    Qed.
+
+    (** Additivity and normality of the loop, from the same properties of its
+        body. In both cases the iterates split first (an induction on the
+        iteration count), and then the sum over iteration counts is exchanged
+        with the other sum. *)
+
+    Lemma witer_add
+          (Hadd : forall a b, cqs_wf a -> cqs_wf b ->
+                              F (cqs_add a b) = cqs_add (F a) (F b))
+          (r s : cqs) (Hr : cqs_wf r) (Hs : cqs_wf s) (i : nat) :
+      witer (cqs_add r s) i = cqs_add (witer r i) (witer s i).
+    Proof.
+      induction i as [| n IH]; [ reflexivity |].
+      change (witer (cqs_add r s) (S n))
+        with (F (restr e (witer (cqs_add r s) n))).
+      change (witer r (S n)) with (F (restr e (witer r n))).
+      change (witer s (S n)) with (F (restr e (witer s n))).
+      rewrite IH, restr_add.
+      apply Hadd; apply restr_wf, witer_wf; assumption.
+    Qed.
+
+    Lemma sem_while_add
+          (Hadd : forall a b, cqs_wf a -> cqs_wf b ->
+                              F (cqs_add a b) = cqs_add (F a) (F b))
+          (r s : cqs) :
+      cqs_wf r -> cqs_wf s ->
+      sem_while e F (cqs_add r s)
+      = cqs_add (sem_while e F r) (sem_while e F s).
+    Proof.
+      intros Hr Hs; rewrite !sem_while_sum.
+      rewrite (cqs_sum_add (fun i : nat => restrn e (witer r i))
+                           (fun i : nat => restrn e (witer s i))
+                           (witer_fam r Hr) (witer_fam s Hs)).
+      f_equal; apply funext; intros i.
+      rewrite (witer_add Hadd r s Hr Hs i); apply restrn_add.
+    Qed.
+
+    Section WhileNormal.
+      Context (Hnorm : forall (J : Type) (G : J -> cqs), cqs_fam G ->
+                         F (cqs_sum G) = cqs_sum (fun j => F (G j)))
+              (Hpres : forall (J : Type) (G : J -> cqs), cqs_fam G ->
+                         cqs_fam (fun j => F (G j))).
+
+      Lemma witer_sum (J : Type) (G : J -> cqs) (HG : cqs_fam G) (i : nat) :
+        witer (cqs_sum G) i = cqs_sum (fun j => witer (G j) i)
+        /\ cqs_fam (fun j => witer (G j) i).
+      Proof.
+        induction i as [| n IH]; [ split; [ reflexivity | exact HG ] |].
+        destruct IH as [IHeq IHfam]; split.
+        - change (witer (cqs_sum G) (S n))
+            with (F (restr e (witer (cqs_sum G) n))).
+          rewrite IHeq, restr_sum, (Hnorm J _ (cqs_fam_restr e _ IHfam)).
+          reflexivity.
+        - apply Hpres, cqs_fam_restr, IHfam.
+      Qed.
+
+      Lemma sem_while_normal (J : Type) (G : J -> cqs) :
+        cqs_fam G ->
+        sem_while e F (cqs_sum G) = cqs_sum (fun j => sem_while e F (G j)).
+      Proof.
+        intros HG.
+        assert (HGwf : forall j, cqs_wf (G j)) by (apply cqs_fam_wf; exact HG).
+        assert (Hsum_wf : cqs_wf (cqs_sum G)) by (apply cqs_fam_sum_wf; exact HG).
+        apply funext; intros m.
+        set (H := fun (i : nat) (j : J) => restrn e (witer (G j) i) m).
+        assert (H1 : forall i, tcp_summable (H i)).
+        { intros i; apply (cqs_fam_ptwise _
+                             (cqs_fam_restrn e _ (proj2 (witer_sum J G HG i)))). }
+        assert (H3 : forall j, tcp_summable (fun i => H i j))
+          by (intros j; apply (cqs_fam_ptwise _ (witer_fam (G j) (HGwf j)))).
+        assert (H2 : tcp_summable (fun i => tcp_sum (H i))).
+        { assert (Heq : (fun i : nat => tcp_sum (H i))
+                        = (fun i : nat => restrn e (witer (cqs_sum G) i) m)).
+          { apply funext; intros i; unfold H.
+            destruct (witer_sum J G HG i) as [Hi _].
+            rewrite Hi, restrn_sum; reflexivity. }
+          rewrite Heq.
+          apply (cqs_fam_ptwise _ (witer_fam (cqs_sum G) Hsum_wf)). }
+        assert (Hwfam : cqs_fam (fun j => sem_while e F (G j))).
+        { unfold cqs_fam.
+          refine (proj1 (tsum_pairs_le_iter
+                           (fun (j : J) (m0 : cmem) =>
+                              tcp_trace (sem_while e F (G j) m0)) _ _)).
+          - intros j; apply tcp_summable_trace,
+              (sem_while_wf_trace (G j) (HGwf j)).
+          - apply (summable_mono _ (fun j => cqs_trace (G j)));
+              [ apply cqs_fam_trace; exact HG |].
+            intros j; apply (sem_while_wf_trace (G j) (HGwf j)). }
+        assert (H4 : tcp_summable (fun j => tcp_sum (fun i => H i j))).
+        { assert (Heq : (fun j : J => tcp_sum (fun i : nat => H i j))
+                        = (fun j : J => sem_while e F (G j) m))
+            by (apply funext; intros j; rewrite sem_while_sum; reflexivity).
+          rewrite Heq; apply (cqs_fam_ptwise _ Hwfam). }
+        transitivity (tcp_sum (fun i : nat => tcp_sum (H i))).
+        { rewrite sem_while_sum.
+          change (cqs_sum (fun i : nat => restrn e (witer (cqs_sum G) i)) m)
+            with (tcp_sum (fun i : nat => restrn e (witer (cqs_sum G) i) m)).
+          f_equal; apply funext; intros i; unfold H.
+          destruct (witer_sum J G HG i) as [Hi _].
+          rewrite Hi, restrn_sum; reflexivity. }
+        rewrite (tcp_sum_swap H H1 H2 H3 H4).
+        unfold cqs_sum; reflexivity.
+      Qed.
+
+    End WhileNormal.
+
+  End While.
+
+  Theorem denote_wf_trace (c : prog) :
+    wt c ->
+    forall r, cqs_wf r ->
+      cqs_wf (denote c r) /\ (cqs_trace (denote c r) <= cqs_trace r)%R.
+  Proof.
+    induction c as [ | x e | x e | e c1 IH1 c2 IH2 | e c1 IH1
+                   | c1 IH1 c2 IH2 | Pq e | Pq e | x Pq e ];
+      intros Hwt r Hr; cbn [denote] in *.
+    - (* Skip *) split; [ exact Hr | apply Rle_refl ].
+    - (* Assign *) apply sem_assign_wf_trace; exact Hr.
+    - (* Sample *) apply sem_sample_wf_trace; exact Hr.
+    - (* Cond *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      destruct (IH1 Hwt1 (restr e r) (restr_wf e r Hr)) as [Hw1 Hb1].
+      destruct (IH2 Hwt2 (restrn e r) (restrn_wf e r Hr)) as [Hw2 Hb2].
+      split.
+      + apply cqs_add_wf; assumption.
+      + rewrite (cqs_trace_add _ _ Hw1 Hw2).
+        rewrite <- (cqs_trace_restr_split e r Hr).
+        apply Rplus_le_compat; assumption.
+    - (* While *)
+      cbn [wt] in Hwt.
+      apply (sem_while_wf_trace e (denote c1) (IH1 Hwt) r Hr).
+    - (* Seq *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      destruct (IH1 Hwt1 r Hr) as [Hw1 Hb1].
+      destruct (IH2 Hwt2 _ Hw1) as [Hw2 Hb2].
+      split; [ exact Hw2 | eapply Rle_trans; eassumption ].
+    - (* QInit *)
+      cbn [wt] in Hwt.
+      destruct (wf_trace_of_pointwise (sem_qinit Pq e r) r
+                  (fun m => sem_qinit_trace_pt Pq e r m (Hwt m)) Hr) as [Hw Hb].
+      split; [ exact Hw | rewrite Hb; apply Rle_refl ].
+    - (* QApply *)
+      cbn [wt] in Hwt.
+      destruct (wf_trace_of_pointwise (sem_qapply Pq e r) r
+                  (fun m => sem_qapply_trace_pt Pq e r m (Hwt m)) Hr) as [Hw Hb].
+      split; [ exact Hw | rewrite Hb; apply Rle_refl ].
+    - (* Measure *)
+      cbn [wt] in Hwt.
+      apply sem_measure_wf_trace; [ exact Hwt | exact Hr ].
+  Qed.
+
+  Corollary denote_wf (c : prog) :
+    wt c -> forall r, cqs_wf r -> cqs_wf (denote c r).
+  Proof. intros Hwt r Hr; apply (denote_wf_trace c Hwt r Hr). Qed.
+
+  (* ================================================================= *)
+  (** ** [[c]] is additive
+
+      A cq-superoperator is in particular additive on the positive cone. This
+      is what lets a state be split -- by the value of a classical expression,
+      or into its pure components -- and the pieces recombined afterwards, so
+      it is a prerequisite for rules Case and If1 and for the converse of
+      Lemma 36.
+
+      Proved for loop-free programs, for the same reason as
+      [denote_wf_trace]. *)
+
+
+
+  Lemma cqs_add_assoc4 (a b c d : cqs) :
+    cqs_add (cqs_add a b) (cqs_add c d)
+    = cqs_add (cqs_add a c) (cqs_add b d).
+  Proof.
+    apply funext; intros m; unfold cqs_add.
+    rewrite <- !tcp_add_assoc; f_equal.
+    rewrite !tcp_add_assoc; f_equal; apply tcp_add_comm.
+  Qed.
+
+  Theorem denote_add (c : prog) :
+    wt c ->
+    forall r s, cqs_wf r -> cqs_wf s ->
+      denote c (cqs_add r s) = cqs_add (denote c r) (denote c s).
+  Proof.
+    induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
+                   | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
+      intros Hwt r s Hr Hs; cbn [denote] in *.
+    - (* Skip *) reflexivity.
+    - (* Assign *)
+      apply funext; intros m'; unfold sem_assign, cqs_add.
+      rewrite <- (tcp_sum_add _ _ _ _ (assign_inner_wf y e r m' Hr)
+                                     (assign_inner_wf y e s m' Hs)).
+      f_equal; apply funext; intros a.
+      destruct (excluded_middle_informative (acond y e m' a));
+        [ reflexivity | symmetry; apply tcp_add_zero ].
+    - (* Sample *)
+      apply funext; intros m'; unfold sem_sample, cqs_add.
+      rewrite <- (tcp_sum_add _ _ _ _ (sample_inner_wf y e r m' Hr)
+                                     (sample_inner_wf y e s m' Hs)).
+      f_equal; apply funext; intros a; apply tcp_scale_add.
+    - (* Cond *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      rewrite restr_add, restrn_add.
+      rewrite (IH1 Hwt1 _ _ (restr_wf e r Hr) (restr_wf e s Hs)).
+      rewrite (IH2 Hwt2 _ _ (restrn_wf e r Hr) (restrn_wf e s Hs)).
+      apply cqs_add_assoc4.
+    - (* While *)
+      cbn [wt] in Hwt.
+      apply (sem_while_add e (denote c1) (denote_wf_trace c1 Hwt)
+               (fun a b Ha Hb => IH1 Hwt a b Ha Hb) r s Hr Hs).
+    - (* Seq *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      rewrite (IH1 Hwt1 _ _ Hr Hs).
+      apply (IH2 Hwt2); apply (denote_wf c1 Hwt1); assumption.
+    - (* QInit *)
+      apply funext; intros m; unfold sem_qinit, cqs_add.
+      rewrite tcp_conj_add, tcp_ptraceL_add, tcp_tensor_add_r, tcp_conj_add;
+        reflexivity.
+    - (* QApply *)
+      apply funext; intros m; unfold sem_qapply, cqs_add; apply tcp_conj_add.
+    - (* Measure *)
+      apply funext; intros m'; unfold sem_measure, cqs_add.
+      cbn [wt] in Hwt.
+      transitivity
+        (tcp_sum (fun a : ctype y =>
+           tcp_add (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                             (r (cupd m' y a)))
+                   (tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                             (s (cupd m' y a))))).
+      { f_equal; apply funext; intros a; apply tcp_conj_add. }
+      apply (tcp_sum_add _ _ _ _
+               (measure_inner_wf y Pq e Hwt r m' Hr)
+               (measure_inner_wf y Pq e Hwt s m' Hs)).
+  Qed.
+
+  (* ================================================================= *)
+  (** ** Normality of [[c]]
+
+      [denote_add] says [[c]] is additive; rule Case (Lemma 48) needs the same
+      for a family indexed by an arbitrary type, because the case split is
+      over the values of a classical expression rather than over two branches.
+      The converse of Lemma 36 needs it for the same reason.
+
+      The clauses that have a sum of their own -- assignment, sampling,
+      measurement -- are the interesting ones: there the two sums have to be
+      exchanged, which is [tcp_sum_swap] and so needs all four of its
+      summability side conditions. *)
+
+  Lemma cqs_fam_denote {J} (F : J -> cqs) (c : prog) :
+    wt c -> cqs_fam F -> cqs_fam (fun j => denote c (F j)).
+  Proof.
+    intros Hwt H; unfold cqs_fam.
+    refine (proj1 (tsum_pairs_le_iter
+                     (fun (j : J) (m : cmem) => tcp_trace (denote c (F j) m))
+                     _ _)).
+    - intros j; apply tcp_summable_trace.
+      apply (denote_wf c Hwt), (cqs_fam_wf F H j).
+    - apply (summable_mono _ (fun j => cqs_trace (F j)));
+        [ apply cqs_fam_trace; exact H |].
+      intros j; apply (proj2 (denote_wf_trace c Hwt _ (cqs_fam_wf F H j))).
+  Qed.
+
+  (** Sums of families, pointwise. *)
+
+
+
   Theorem denote_sum (c : prog) :
-    wt c -> loopfree c ->
+    wt c ->
     forall (J : Type) (F : J -> cqs), cqs_fam F ->
       denote c (cqs_sum F) = cqs_sum (fun j => denote c (F j)).
   Proof.
     induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
                    | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
-      intros Hwt Hlf J F HF.
+      intros Hwt J F HF.
     - (* Skip *) reflexivity.
     - (* Assign *)
       apply funext; intros m'.
@@ -1155,7 +1393,7 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
       { unfold G;
           apply (cqs_fam_ptwise (fun j => denote (Assign y e) (F j))
-                   (cqs_fam_denote F (Assign y e) Hwt Hlf HF) m'). }
+                   (cqs_fam_denote F (Assign y e) Hwt HF) m'). }
       assert (H3 : forall a, tcp_summable (fun j => G j a)).
       { intros a; apply tcp_summable_trace.
         apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
@@ -1190,7 +1428,7 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
       { unfold G;
           apply (cqs_fam_ptwise (fun j => denote (Sample y e) (F j))
-                   (cqs_fam_denote F (Sample y e) Hwt Hlf HF) m'). }
+                   (cqs_fam_denote F (Sample y e) Hwt HF) m'). }
       assert (H3 : forall a, tcp_summable (fun j => G j a)).
       { intros a; apply tcp_summable_trace.
         apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
@@ -1212,21 +1450,22 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         [ f_equal; apply funext; intros a; symmetry; apply Hin |].
       rewrite <- (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
     - (* Cond *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
       cbn [denote]; rewrite restr_sum, restrn_sum.
-      rewrite (IH1 Hwt1 Hlf1 J _ (cqs_fam_restr e F HF)).
-      rewrite (IH2 Hwt2 Hlf2 J _ (cqs_fam_restrn e F HF)).
+      rewrite (IH1 Hwt1 J _ (cqs_fam_restr e F HF)).
+      rewrite (IH2 Hwt2 J _ (cqs_fam_restrn e F HF)).
       apply cqs_sum_add;
-        [ apply (cqs_fam_denote _ c1 Hwt1 Hlf1), cqs_fam_restr; exact HF
-        | apply (cqs_fam_denote _ c2 Hwt2 Hlf2), cqs_fam_restrn; exact HF ].
-    - (* While: excluded *)
-      cbn [loopfree] in Hlf; destruct Hlf.
+        [ apply (cqs_fam_denote _ c1 Hwt1), cqs_fam_restr; exact HF
+        | apply (cqs_fam_denote _ c2 Hwt2), cqs_fam_restrn; exact HF ].
+    - (* While *)
+      cbn [wt] in Hwt; cbn [denote].
+      apply (sem_while_normal e (denote c1) (denote_wf_trace c1 Hwt)
+               (fun K H HK => IH1 Hwt K H HK)
+               (fun K H HK => cqs_fam_denote H c1 Hwt HK) J F HF).
     - (* Seq *)
-      cbn [wt loopfree] in Hwt, Hlf.
-      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
-      cbn [denote]; rewrite (IH1 Hwt1 Hlf1 J F HF).
-      apply (IH2 Hwt2 Hlf2), (cqs_fam_denote F c1 Hwt1 Hlf1 HF).
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      cbn [denote]; rewrite (IH1 Hwt1 J F HF).
+      apply (IH2 Hwt2), (cqs_fam_denote F c1 Hwt1 HF).
     - (* QInit *)
       apply funext; intros m.
       assert (S0 : tcp_summable (fun j => F j m)) by apply (cqs_fam_ptwise F HF).
@@ -1278,7 +1517,7 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
       { unfold G;
           apply (cqs_fam_ptwise (fun j => denote (Measure y Pq e) (F j))
-                   (cqs_fam_denote F (Measure y Pq e) Hwt Hlf HF) m'). }
+                   (cqs_fam_denote F (Measure y Pq e) Hwt HF) m'). }
       assert (H3 : forall a, tcp_summable (fun j => G j a)).
       { intros a; apply tcp_summable_trace.
         apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
@@ -1300,9 +1539,8 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   Corollary denote_trace_le (c : prog) :
-    wt c -> loopfree c ->
-    forall r, cqs_wf r -> (cqs_trace (denote c r) <= cqs_trace r)%R.
-  Proof. intros Hwt Hlf r Hr; apply (denote_wf_trace c Hwt Hlf r Hr). Qed.
+    wt c -> forall r, cqs_wf r -> (cqs_trace (denote c r) <= cqs_trace r)%R.
+  Proof. intros Hwt r Hr; apply (denote_wf_trace c Hwt r Hr). Qed.
 
   (* ================================================================= *)
   (** ** Locality

@@ -15,7 +15,7 @@
     Fubini for unordered nonnegative sums -- needed only by rule JointSample,
     for [marginal1] / [marginal2] -- is deliberately not here yet. *)
 
-From Stdlib Require Import List Lra.
+From Stdlib Require Import List Arith Lra.
 From QRHL.Substrate Require Import Ambient.
 Import ListNotations.
 
@@ -788,6 +788,38 @@ Proof.
     intros j Hj; apply In_lremove.
     + intros ->; contradiction.
     + apply Hsub; right; exact Hj.
+Qed.
+
+(** *** Families on [nat]
+
+    Every duplicate-free list of naturals sits inside an initial segment, so a
+    uniform bound on the initial segments bounds the whole unordered sum. This
+    is what turns the telescoping estimate for [while] into summability. *)
+
+Fixpoint lmax (l : list nat) : nat :=
+  match l with nil => 0 | x :: t => Nat.max x (lmax t) end.
+
+Lemma In_le_lmax (i : nat) (l : list nat) : In i l -> (i <= lmax l)%nat.
+Proof.
+  induction l as [| x t IH]; simpl; [ tauto |].
+  intros [-> | Hin]; [ apply Nat.le_max_l |].
+  eapply Nat.le_trans; [ apply IH, Hin | apply Nat.le_max_r ].
+Qed.
+
+Lemma nat_summable_of_seq (f : nat -> R) (M : R) :
+  nonneg f -> (forall n, (lsum f (seq 0 n) <= M)%R) ->
+  summable f /\ (tsum f <= M)%R.
+Proof.
+  intros Hf HM.
+  assert (Hlist : forall l, NoDup l -> (lsum f l <= M)%R).
+  { intros l Hnd.
+    eapply Rle_trans; [| apply (HM (S (lmax l))) ].
+    apply lsum_le_incl; [ exact Hf | exact Hnd | apply seq_NoDup |].
+    intros i Hi; apply in_seq; split;
+      [ apply Nat.le_0_l
+      | cbn; apply Nat.lt_succ_r, In_le_lmax, Hi ]. }
+  assert (Hs : summable f) by (apply summable_bounded with (M := M); exact Hlist).
+  split; [ exact Hs | apply tsum_least; [ exact Hs | exact Hlist ] ].
 Qed.
 
 Lemma tsum_add {I : Type} (f g : I -> R) :

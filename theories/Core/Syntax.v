@@ -212,10 +212,11 @@ Module SyntaxTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Lemma cwritten_cfv (c : prog) (x : cvar) : cwritten c x -> cfv c x.
   Proof. induction c; simpl; tauto. Qed.
 
-  (** Loop-free programs. The denotation of a loop is an infinite sum of
-      iterates, and bounding its trace needs an argument of its own; rules
-      While1 and JointWhile are Phase 2, so the results that need that argument
-      are stated for loop-free programs until then. *)
+  (** Loop-free programs. No longer needed by the semantics: the denotation of
+      a loop is an infinite sum of iterates, and the telescoping argument that
+      bounds its trace is now in [Semantics.v], so [denote_wf_trace],
+      [denote_add] and [denote_sum] hold for every well-typed program. Kept
+      because rules that genuinely depend on termination will want it. *)
   Fixpoint loopfree (c : prog) : Prop :=
     match c with
     | While _ _                  => False

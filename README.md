@@ -74,9 +74,9 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1b | variables, expressions, syntax | **done** |
 | 1b | registers: memory split, `U_vars`, `A»Q`, `S»Q` | **done** (set-indexed; ordered `Type^list_Q` bridge pending) |
 | 1b | semantics `⟦c⟧`, `Pr[e : c(ρ)]`, point-mass laws | **done** |
-| 1b | `denote_wf_trace`: `⟦c⟧` is a cq-superoperator | **done** for loop-free programs |
-| 1b | `denote_add`: `⟦c⟧` is additive | **done** for loop-free programs |
-| 1b | `denote_sum`: `⟦c⟧` is normal (`⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ`) | **done** for loop-free programs |
+| 1b | `denote_wf_trace`: `⟦c⟧` is a cq-superoperator | **done**, loops included |
+| 1b | `denote_add`: `⟦c⟧` is additive | **done**, loops included |
+| 1b | `denote_sum`: `⟦c⟧` is normal (`⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ`) | **done**, loops included |
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
@@ -98,7 +98,8 @@ The analysis that three obligations were waiting on is **finished**.
 partition bound, both directions of Tonelli over a product, additivity,
 scaling, and reindexing along injections. On top of it, `denote_wf_trace`
 proves that `⟦c⟧` really is a cq-superoperator on `T⁺_cq[V]` — it preserves
-summability and does not increase the total trace — for loop-free programs.
+summability and does not increase the total trace — for **every** well-typed
+program, loops included.
 Assignment reindexes along an injection (its side condition pins the target
 memory down); sampling and measurement do not, so they go through the bijection
 `(m′,a) ↦ (m′(x:=a), m′ x)` and then Tonelli.
@@ -136,12 +137,23 @@ under that bijection the guard becomes "this is what `e` says of the source",
 which *is* unique. So the sum collapses after reindexing, not before, and that
 is exactly why the right-hand projection comes back unchanged.
 
-`denote_add` — that `⟦c⟧` is additive on the positive cone — is also proved for
-loop-free programs, which is what lets a state be split and the pieces
-recombined.
+`denote_add` — that `⟦c⟧` is additive on the positive cone — is also proved,
+which is what lets a state be split and the pieces recombined.
+
+The loop clause of all three inductions is a telescoping estimate. Writing
+`t i` for the trace at the top of iteration *i* and `a i` for the trace of what
+exits there, splitting by the guard gives `t i = tr(down_e ρᵢ) + a i`, and the
+body does not increase the trace, so `a i + t (i+1) ≤ t i`. Summing the first
+*n* of those telescopes to `∑_{i<n} a i + t n ≤ t 0`: all the exits together
+weigh no more than the state we started with. Every duplicate-free list of
+iteration counts sits inside an initial segment, so that bounds the unordered
+sum too. Additivity and normality then follow because the iterates themselves
+split, by induction on the iteration count, and the sum over iteration counts
+exchanges with the other sum. `loopfree` is consequently no longer used
+anywhere, and `Case` no longer carries it.
 
 `denote_sum` — normality of `⟦c⟧`, i.e. `⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ` for an
-arbitrary index type — is proved for loop-free programs. The three clauses
+arbitrary index type — is proved. The three clauses
 with a sum of their own (assignment, sampling, measurement) are where the work
 is: there the statement's sum and the family's sum have to be exchanged, which
 is `tcp_sum_swap` and so needs all four of its summability side conditions. It
@@ -154,9 +166,7 @@ the pieces sum back to the original. `Core/Judgment.v` now has the general
 machinery for summed families of relational states (`rcqs_fam`, `rcqs_sum`,
 well-formedness, separability, satisfaction, and normality of both
 projections), which is also precisely what the converse of Lemma 36 was
-waiting on. Note that `Case` carries `wt`/`loopfree` side conditions the
-paper's rule does not: they come from `denote_sum`, and go away once the
-`while` clause is added to that induction.
+waiting on. `Case` carries only a well-typedness side condition.
 
 `QrhlElim` (Lemma 50) is proved, out of phase order, because it is what makes
 the logic usable: it is how a judgment turns into a statement about
@@ -195,7 +205,7 @@ guessed):
 | ~~`If1`, `JointIf`~~ | **done** — needed no new axioms |
 | ~~`Sample1`~~ | **done** |
 | ~~`Measure1`~~ | **done** — four textbook axioms: a projector fixes its image, `Meas(D,X)⊗id ⊆ Meas(D,X⊗Y)` (bounded and total forms), and that a total measurement on one factor leaves the other factor's reduced state alone |
-| ~~`Case`~~ | **done** — needed `denote_sum`; carries `wt`/`loopfree` side conditions until the loop clause is added |
+| ~~`Case`~~ | **done** — needed `denote_sum` |
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
 | `JointSample` | a two-sided reindexing: the witness updates `x₁` and `y₂` together along a coupling, so `rbeta` has to be replaced by its joint analogue |
 | `JointMeasureSimple` | the same, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
