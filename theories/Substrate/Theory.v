@@ -794,6 +794,17 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     tcp_conj Uswap (tcp_tensor r s) = tcp_tensor s r.
   Proof. unfold Uswap; apply tcp_conj_pswap. Qed.
 
+  (** The mirror of [tcp_scale_tensor_l], scaling the factor that varies on
+      the *right*. Not a second axiom, by the same factor-swap route as
+      [tcp_tensor_sum_l]. *)
+  Lemma tcp_scale_tensor_r {X Y} (a : R) (r : tcp X) (s : tcp Y) :
+    tcp_scale a (tcp_tensor r s) = tcp_tensor r (tcp_scale a s).
+  Proof.
+    rewrite <- (tcp_conj_Uswap s r), <- tcp_conj_scale, tcp_scale_tensor_l,
+      (tcp_conj_Uswap (tcp_scale a s) r).
+    reflexivity.
+  Qed.
+
   (* ================================================================= *)
   (** ** Normalizing a rank-one projection
 

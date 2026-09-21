@@ -53,6 +53,7 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
 
   Definition cqs_zero : cqs := fun _ => tcp_zero.
   Definition cqs_add (r s : cqs) : cqs := fun m => tcp_add (r m) (s m).
+  Definition cqs_scale (a : R) (r : cqs) : cqs := fun m => tcp_scale a (r m).
   Definition cqs_sum {J : Type} (F : J -> cqs) : cqs :=
     fun m => tcp_sum (fun j => F j m).
 
@@ -966,6 +967,20 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     destruct (ev e m); [ symmetry; apply tcp_add_zero | reflexivity ].
   Qed.
 
+  Lemma restr_scale (a : R) (e : expr bool) (r : cqs) :
+    restr e (cqs_scale a r) = cqs_scale a (restr e r).
+  Proof.
+    apply funext; intros m; unfold restr, cqs_scale.
+    destruct (ev e m); [ reflexivity | symmetry; apply tcp_scale_zero ].
+  Qed.
+
+  Lemma restrn_scale (a : R) (e : expr bool) (r : cqs) :
+    restrn e (cqs_scale a r) = cqs_scale a (restrn e r).
+  Proof.
+    apply funext; intros m; unfold restrn, cqs_scale.
+    destruct (ev e m); [ symmetry; apply tcp_scale_zero | reflexivity ].
+  Qed.
+
   Lemma cqs_sum_add {J} (A B : J -> cqs) :
     cqs_fam A -> cqs_fam B ->
     cqs_add (cqs_sum A) (cqs_sum B) = cqs_sum (fun j => cqs_add (A j) (B j)).
@@ -974,6 +989,13 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     symmetry;
       apply (tcp_sum_add _ _ _ _ (cqs_fam_ptwise A HA m)
                                  (cqs_fam_ptwise B HB m)).
+  Qed.
+
+  Lemma cqs_sum_scale {J} (a : R) (A : J -> cqs) :
+    cqs_fam A -> cqs_scale a (cqs_sum A) = cqs_sum (fun j => cqs_scale a (A j)).
+  Proof.
+    intros HA; apply funext; intros m; unfold cqs_scale, cqs_sum.
+    apply (tcp_scale_sum _ _ _ _ (cqs_fam_ptwise A HA m)).
   Qed.
 
   Lemma restr_sum {J} (e : expr bool) (F : J -> cqs) :
@@ -1137,6 +1159,34 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                            (witer_fam r Hr) (witer_fam s Hs)).
       f_equal; apply funext; intros i.
       rewrite (witer_add Hadd r s Hr Hs i); apply restrn_add.
+    Qed.
+
+    Lemma witer_scale
+          (Hscale : forall a r, (0 <= a)%R -> cqs_wf r ->
+                                F (cqs_scale a r) = cqs_scale a (F r))
+          (a : R) (Ha : (0 <= a)%R) (r : cqs) (Hr : cqs_wf r) (i : nat) :
+      witer (cqs_scale a r) i = cqs_scale a (witer r i).
+    Proof.
+      induction i as [| n IH]; [ reflexivity |].
+      change (witer (cqs_scale a r) (S n))
+        with (F (restr e (witer (cqs_scale a r) n))).
+      change (witer r (S n)) with (F (restr e (witer r n))).
+      rewrite IH, restr_scale.
+      apply Hscale; [ exact Ha | apply restr_wf, witer_wf; exact Hr ].
+    Qed.
+
+    Lemma sem_while_scale
+          (Hscale : forall a r, (0 <= a)%R -> cqs_wf r ->
+                                F (cqs_scale a r) = cqs_scale a (F r))
+          (a : R) (Ha : (0 <= a)%R) (r : cqs) :
+      cqs_wf r ->
+      sem_while e F (cqs_scale a r) = cqs_scale a (sem_while e F r).
+    Proof.
+      intros Hr; rewrite !sem_while_sum.
+      rewrite (cqs_sum_scale a (fun i : nat => restrn e (witer r i))
+                             (witer_fam r Hr)).
+      f_equal; apply funext; intros i.
+      rewrite (witer_scale Hscale a Ha r Hr i); apply restrn_scale.
     Qed.
 
     Section WhileNormal.
@@ -1334,6 +1384,69 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       apply (tcp_sum_add _ _ _ _
                (measure_inner_wf y Pq e Hwt r m' Hr)
                (measure_inner_wf y Pq e Hwt s m' Hs)).
+  Qed.
+
+  (** [[c]] commutes with scaling by a nonnegative real, needed by the
+      converse of Lemma 36: the witness there is a sum of *scaled*
+      per-component witnesses, and scaling has to be pushed through [[c]]
+      the same way addition and arbitrary sums already are. The nonnegativity
+      is not used by any single clause below (every axiom used --
+      [tcp_scale_sum], [tcp_conj_scale], [tcp_ptraceL_scale],
+      [tcp_scale_tensor_r] -- holds for every real), but it is what keeps a
+      *scaled* state inside [T^+_cq[V]] in the first place, so it is carried
+      throughout for consistency with the rest of the trusted surface. *)
+
+  Theorem denote_scale (c : prog) :
+    wt c ->
+    forall (a : R) (r : cqs), (0 <= a)%R -> cqs_wf r ->
+      denote c (cqs_scale a r) = cqs_scale a (denote c r).
+  Proof.
+    induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
+                   | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
+      intros Hwt a r Ha Hr; cbn [denote] in *.
+    - (* Skip *) reflexivity.
+    - (* Assign *)
+      apply funext; intros m'; unfold sem_assign, cqs_scale.
+      rewrite (tcp_scale_sum _ _ _ _ (assign_inner_wf y e r m' Hr)).
+      f_equal; apply funext; intros a'.
+      destruct (excluded_middle_informative (acond y e m' a'));
+        [ reflexivity | symmetry; apply tcp_scale_zero ].
+    - (* Sample *)
+      apply funext; intros m'; unfold sem_sample, cqs_scale.
+      rewrite (tcp_scale_sum _ _ _ _ (sample_inner_wf y e r m' Hr)).
+      f_equal; apply funext; intros a'.
+      rewrite !tcp_scale_assoc; f_equal; apply Rmult_comm.
+    - (* Cond *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      rewrite restr_scale, restrn_scale.
+      rewrite (IH1 Hwt1 a _ Ha (restr_wf e r Hr)).
+      rewrite (IH2 Hwt2 a _ Ha (restrn_wf e r Hr)).
+      unfold cqs_add, cqs_scale; apply funext; intros m.
+      symmetry; apply tcp_scale_add.
+    - (* While *)
+      cbn [wt] in Hwt.
+      apply (sem_while_scale e (denote c1) (denote_wf_trace c1 Hwt)
+               (fun a' r' Ha' Hr' => IH1 Hwt a' r' Ha' Hr') a Ha r Hr).
+    - (* Seq *)
+      cbn [wt] in Hwt; destruct Hwt as [Hwt1 Hwt2].
+      rewrite (IH1 Hwt1 a _ Ha Hr).
+      apply (IH2 Hwt2 a); [ exact Ha | apply (denote_wf c1 Hwt1); exact Hr ].
+    - (* QInit *)
+      apply funext; intros m; unfold sem_qinit, cqs_scale.
+      rewrite tcp_conj_scale, tcp_ptraceL_scale, <- tcp_scale_tensor_r,
+        tcp_conj_scale; reflexivity.
+    - (* QApply *)
+      apply funext; intros m; unfold sem_qapply, cqs_scale; apply tcp_conj_scale.
+    - (* Measure *)
+      apply funext; intros m'; unfold sem_measure, cqs_scale.
+      cbn [wt] in Hwt.
+      transitivity
+        (tcp_sum (fun a' : ctype y =>
+           tcp_scale a (tcp_conj (olift Pq (ev e (cupd m' y a') (m' y)))
+                                 (r (cupd m' y a'))))).
+      { f_equal; apply funext; intros a'; apply tcp_conj_scale. }
+      symmetry; apply (tcp_scale_sum _ _ _ _
+                          (measure_inner_wf y Pq e Hwt r m' Hr)).
   Qed.
 
   (* ================================================================= *)
