@@ -518,7 +518,36 @@ other one-sided rule). The reassociation is needed only to connect
 because that is the paper's surface form) back to that picture when
 extracting what `psat r (pdiv ...)` gives about `r`'s decomposition. That
 connection, the witness's projections and separability, and the rule proof
-itself are not attempted yet.
+itself are not attempted yet. `Uprodassoc` (`Substrate/Theory.v`, this
+commit), the generic plain-product associator `op ((A*B)*C) (A*(B*C))`, is
+already landed for it -- reassociating `(qsub Q * qsub Qᶜ) * qmem` into
+`qsub Q * (qsub Qᶜ * qmem)` is what lets the witness trace out just `qsub Q`
+via `tcp_ptraceL` (= `tcp_ptrace2`, which keeps the *second* factor).
+
+The concrete shape for next time, on `tcp (qmem * qmem)`:
+```
+tcp_conj (tensoro (Usplit Q) oid)
+  (tcp_tensor (tcp_proj psi)
+     (tcp_ptraceL (tcp_conj Uprodassoc
+        (tcp_conj (tensoro (oadj (Usplit Q)) oid) rho))))
+```
+wrapped in `tcp_conj (oadj Urqpair) (... (tcp_conj Urqpair (r rm)))` to land
+back on `rqmem`; `psi := oapp (oadj (Urelab SL Q)) (ev e (csel SL rm))`, using
+`Urelab` a second time to place the fresh state. Two traps to check *before*
+writing the projection proofs, not after:
+
+- **The right projection is only unchanged if `psi` is normalized.**
+  `tcp_ptrace2 (tcp_tensor A B) = tcp_scale (tcp_trace A) B`, so an
+  un-normalized fresh state *scales* the untouched side. `wt (QInit P e)`
+  (`Syntax.v`) is presumably where that normalization hypothesis lives --
+  `sem_qinit_trace_pt` (`Semantics.v:867`) already needs it and
+  `denote_wf_trace`'s `QInit` clause already threads it through `Hwt`. Confirm
+  the exact shape and carry it as a rule hypothesis from the start.
+- **Separability needs `tcp_ptraceL` to distribute over a tensor the way
+  `actL_sep` (`Rules/Quantum.v`) needs `tcp_conj` to.** Check whether
+  `tcp_conj_tensor` composing with `tcp_ptrace2_tensor` already gives
+  `tcp_ptraceL (tcp_conj (tensoro A oid) (tcp_tensor X Y)) = tcp_scale (tcp_trace (tcp_conj A X)) Y`-shaped
+  facts, or whether that composition is itself a missing lemma.
 
 ### 7e. `JointMeasureSimple` (Lem 64)
 
