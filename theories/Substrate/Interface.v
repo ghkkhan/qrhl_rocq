@@ -103,6 +103,42 @@ Module Type HILBERT_SUBSTRATE.
       inner (ket x) (ket y) = if excluded_middle_informative (x = y) then C1 else C0.
 
   (* ================================================================= *)
+  (** *** Countable orthogonal sums
+
+      The one piece of Hilbert-space completeness this development needs
+      beyond [tcp_sum] (a *mixture* of positive trace-class operators): a
+      countable *coherent* sum of vectors, i.e. a superposition. This is
+      what the Schmidt decomposition (below, in the Tensor product section,
+      since it also needs [tensorv]) is stated with, and what lets its
+      individual terms be recovered from a subspace-membership fact --
+      [tcp_decompose] cannot substitute, since it decomposes a *reduced*
+      (mixed) state and so has already forgotten the coherence a
+      superposition carries.
+
+      Deliberately minimal: [vsum] is characterized only for the case this
+      development actually uses -- an *orthogonal* family with summable
+      squared norms (the Bessel/Parseval criterion) -- not a general theory
+      of unordered Hilbert-space sums with all its usual companion lemmas
+      (there is deliberately no [inner_vsum] distributing [inner] over
+      [vsum]; nothing here needs it, and it would need summing *complex*
+      numbers, which [Sums.v]'s [tsum] does not cover). *)
+
+  Parameter vsum : forall {X} {J : Type}, (J -> l2 X) -> l2 X.
+  Parameter vsummable : forall {X} {J : Type}, (J -> l2 X) -> Prop.
+
+  Axiom vsum_not_summable : forall X J (F : J -> l2 X),
+      ~ vsummable F -> vsum F = vzero.
+
+  (** Bessel/Parseval: an orthogonal family with summable squared norms is
+      summable. (The general theory also has a converse and much more; this
+      is exactly the one direction the development uses, to know a Schmidt
+      decomposition's own family is summable.) *)
+  Axiom vsummable_orthogonal : forall X J (F : J -> l2 X),
+      (forall i j, i <> j -> inner (F i) (F j) = C0) ->
+      summable (fun j => Cre (inner (F j) (F j))) ->
+      vsummable F.
+
+  (* ================================================================= *)
   (** ** Subspaces
 
       "The word subspace always refers to a topologically closed subspace"
@@ -313,6 +349,58 @@ Module Type HILBERT_SUBSTRATE.
   Parameter otensorL : forall {X Y}, l2 X -> op Y (X * Y).
   Axiom otensorL_app : forall X Y (v : l2 X) (w : l2 Y),
       oapp (@otensorL X Y v) w = tensorv v w.
+
+  (* ================================================================= *)
+  (** *** Schmidt decomposition (paper's Lemma 7)
+
+      "Let [psi in l2[XY]]. Then [psi] can be decomposed as
+      [psi = sum_i lambda_i psi_i^X (x) psi_i^Y] for some [lambda_i > 0],
+      orthonormal [psi_i^X in l2[X]], and orthonormal [psi_i^Y in l2[Y]]."
+      Textbook (any functional analysis reference for separable Hilbert
+      spaces; the paper cites Reed and Simon for the general case). This is
+      the first (and, so far, only) user of [vsum]: existence of a coherent
+      countable decomposition is exactly what [tcp_decompose] -- which only
+      ever decomposes a *reduced*, already-mixed state -- cannot supply.
+
+      The [lambda_i > 0] side condition (strict, not merely [>= 0]) is
+      load-bearing beyond fidelity to the paper: it guarantees every index
+      in [I] genuinely contributes to [psi], so that whatever is proved
+      about an individual [a i]/[b i] pair below (via
+      [hmem_tensor_span_component]) is a fact about a real piece of [psi], not
+      about an unconstrained zero-weighted "junk" term a careless caller
+      could otherwise smuggle in. *)
+  Axiom schmidt_decompose : forall X Y (psi : l2 (X * Y)),
+      exists (I : Type) (lam : I -> R) (a : I -> l2 X) (b : I -> l2 Y),
+        (forall i, (0 < lam i)%R) /\
+        (forall i j, i <> j -> inner (a i) (a j) = C0) /\
+        (forall i, inner (a i) (a i) = C1) /\
+        (forall i j, i <> j -> inner (b i) (b j) = C0) /\
+        (forall i, inner (b i) (b i) = C1) /\
+        vsummable (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))) /\
+        psi = vsum (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))).
+
+  (** The fact both Lemma 29 and rule [QInit1] actually need, and the reason
+      [schmidt_decompose] alone does not suffice: if a countable coherent
+      sum of pure products lies in a tensor-product subspace [W (x) l2[Y]]
+      (a subspace [W] on the first factor, *unrestricted* on the second),
+      and the second factors are pairwise orthogonal and individually
+      nonzero, then *every* first factor individually lies in [W]. This is
+      not a fact about orthogonal families in general -- an orthogonal
+      family summing into an *arbitrary* closed subspace does not let its
+      terms be recovered (e.g. two orthonormal vectors summing into the
+      one-dimensional span of their sum, which contains neither alone); it
+      is specifically the tensor-product shape, with the *unconstrained*
+      second factor, that licenses it. Stated via [hspan] directly rather
+      than through [htensor] (`Theory.v`), which is not yet in scope here;
+      [Theory.v] derives the named form immediately below its definition. *)
+  Axiom hmem_tensor_span_component : forall X Y J (W : hspace X)
+      (a : J -> l2 X) (b : J -> l2 Y) (j0 : J),
+      vsummable (fun j => tensorv (a j) (b j)) ->
+      (forall i j, i <> j -> inner (b i) (b j) = C0) ->
+      (forall j, b j <> vzero) ->
+      hmem (vsum (fun j => tensorv (a j) (b j)))
+           (hspan (fun u => exists x y, hmem x W /\ hmem y htop /\ u = tensorv x y)) ->
+      hmem (a j0) W.
 
   (* ================================================================= *)
   (** ** Reindexing

@@ -136,6 +136,10 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `inner_ge0` | `forall X (v : l2 X), Cge0 (inner v v)` |
 | Axiom | `inner_definite` | `forall X (v : l2 X), inner v v = C0 -> v = vzero` |
 | Axiom | `inner_ket` | `forall X (x y : X), inner (ket x) (ket y) = if excluded_middle_informative (x = y) then C1 else C0` |
+| Parameter | `vsum` | `forall {X} {J : Type}, (J -> l2 X) -> l2 X` |
+| Parameter | `vsummable` | `forall {X} {J : Type}, (J -> l2 X) -> Prop` |
+| Axiom | `vsum_not_summable` | `forall X J (F : J -> l2 X), ~ vsummable F -> vsum F = vzero` |
+| Axiom | `vsummable_orthogonal` | `forall X J (F : J -> l2 X), (forall i j, i <> j -> inner (F i) (F j) = C0) -> summable (fun j => Cre (inner (F j) (F j))) -> vsummable F` |
 
 ### Subspaces
 
@@ -217,6 +221,8 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `otensorR_app` | `forall X Y (w : l2 Y) (v : l2 X), oapp (@otensorR X Y w) v = tensorv v w` |
 | Parameter | `otensorL` | `forall {X Y}, l2 X -> op Y (X * Y)` |
 | Axiom | `otensorL_app` | `forall X Y (v : l2 X) (w : l2 Y), oapp (@otensorL X Y v) w = tensorv v w` |
+| Axiom | `schmidt_decompose` | `forall X Y (psi : l2 (X * Y)), exists (I : Type) (lam : I -> R) (a : I -> l2 X) (b : I -> l2 Y), (forall i, (0 < lam i)%R) /\ (forall i j, i <> j -> inner (a i) (a j) = C0) /\ (forall i, inner (a i) (a i) = C1) /\ (forall i j, i <> j -> inner (b i) (b j) = C0) /\ (forall i, inner (b i) (b i) = C1) /\ vsummable (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))) /\ psi = vsum (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i)))` |
+| Axiom | `hmem_tensor_span_component` | `forall X Y J (W : hspace X) (a : J -> l2 X) (b : J -> l2 Y) (j0 : J), vsummable (fun j => tensorv (a j) (b j)) -> (forall i j, i <> j -> inner (b i) (b j) = C0) -> (forall j, b j <> vzero) -> hmem (vsum (fun j => tensorv (a j) (b j))) (hspan (fun u => exists x y, hmem x W /\ hmem y htop /\ u = tensorv x y)) -> hmem (a j0) W` |
 
 ### Reindexing
 
@@ -317,6 +323,6 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_supp_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_supp (tcp_sum F) = hSup (fun j => tcp_supp (F j))` |
 | Axiom | `tcp_decompose` | `forall X (r : tcp X), exists (J : Type) (psi : J -> l2 X), tcp_summable (fun j => tcp_proj (psi j)) /\ r = tcp_sum (fun j => tcp_proj (psi j))` |
 
-**Totals: 44 parameters, 128 axioms.**
+**Totals: 46 parameters, 132 axioms.**
 
 <!-- END GENERATED INVENTORY -->

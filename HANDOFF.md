@@ -268,14 +268,14 @@ inventory in `AXIOMS.md`, which is where the statements live.
 
 | group | params | axioms |
 |---|---|---|
-| Vectors: the space l2(X) | 7 | 15 |
+| Vectors: the space l2(X) | 9 | 17 |
 | Subspaces | 8 | 15 |
 | Bounded operators | 9 | 10 |
 | Preimages of subspaces | 1 | 1 |
-| Tensor product | 4 | 13 |
+| Tensor product | 4 | 15 |
 | Reindexing | 1 | 3 |
 | Positive trace-class operators | 14 | 71 |
-| **total** | **44** | **128** |
+| **total** | **46** | **132** |
 
 Additions since Lemma 36's converse was proved (this count; `make axioms`
 regenerates `AXIOMS.md`, which is authoritative): **`op_ext_ket`** (replacing
@@ -309,16 +309,59 @@ to need "partial trace commutes with reassociating a tensor product" after
 all, the three axioms above are exactly the ones to re-add, with this
 paragraph as the reason they were pulled.
 
+**The continuity boundary widened deliberately, at the user's explicit
+direction, to unblock §7f/§7d.** §7f found that Lemma 7 (Schmidt
+decomposition) needs a countable *coherent* vector sum -- a superposition,
+not a `tcp_sum`-style mixture -- which the signature had never exposed. Given
+three options (add the capability; restrict Lemma 29 to a special case that
+avoids it; defer both `QInit1` and Lemma 29's forward direction and move on),
+**the user chose to add it.** Four new axioms, kept as narrow as the need
+actually is (no general theory of Hilbert-space sums, no `inner`-vs-`vsum`
+distributivity law -- nothing beyond what Schmidt and its one consumer-shaped
+extraction fact require):
+
+- **`vsum`/`vsummable`** (`Vectors`, 2 params) -- a countable vector sum,
+  total via **`vsum_not_summable`** (mirroring `tcp_sum_not_summable`
+  exactly) and characterized, for the one case used, by
+  **`vsummable_orthogonal`** (Bessel/Parseval: an orthogonal family with
+  summable squared norms is summable).
+- **`schmidt_decompose`** (`Tensor product`) -- the paper's Lemma 7 itself,
+  with `lambda_i > 0` *strict* (not `>= 0`): this is load-bearing, not just
+  fidelity to the paper -- it is what guarantees every index in the
+  decomposition genuinely contributes to `psi`, so nothing downstream can
+  smuggle in an unconstrained zero-weighted "junk" term.
+- **`hmem_tensor_span_component`** (`Tensor product`; named `Theory.v` form:
+  `hmem_htensor_component`) -- the fact both Lemma 29 and `QInit1` actually
+  need, and not a consequence of `schmidt_decompose` alone: if a coherent sum
+  of pure products lies in `W (x) l2[Y]` (unrestricted on the second
+  factor), and the second factors are pairwise orthogonal and individually
+  nonzero, each first factor individually lies in `W`. **Checked against a
+  counterexample before landing**: plain orthogonality of the terms is not
+  enough (two orthonormal vectors summing into the one-dimensional span of
+  their sum lie in that span only together, never alone) -- what licenses
+  the extraction is specifically the tensor-product shape with an
+  *unconstrained* second factor, which is why the axiom is stated that way
+  and not more generally.
+
+`make assumptions` is unchanged by all four (as expected: they widen the
+*substrate*, not the ambient classical-logic dependencies `Print Assumptions`
+tracks). `Sanity.v` gained a sixth canary, `canary_vsum_nondegenerate`:
+`schmidt_decompose` applied to the plainly-nonzero product ket
+`tensorv (ket true) (ket true)` returns a family whose `vsum` reconstructs
+that same nonzero vector, so the signature does not silently collapse every
+summable family to `vzero`.
+
 Discipline when adding one: it must be a statement you could cite a textbook
 for; it must be *used* by a proof you are writing now (never speculatively);
 and it must not mention qRHL vocabulary. `make axioms` regenerates the
 inventory; `AXIOMS.md` names, for every *absent* axiom, the first proof that
 will need it.
 
-`Sanity.v` derives five concrete *inequalities* from the signature (the lattice
+`Sanity.v` derives six concrete *inequalities* from the signature (the lattice
 has ≥2 elements, distinct kets span distinct lines, `⊥` is not the identity,
-the tensor does not collapse, and `op_ext_ket` does not collapse operators
-that act differently on kets). This catches a degenerate or contradictory
+the tensor does not collapse, `op_ext_ket` does not collapse operators
+that act differently on kets, and `vsum` does not collapse every summable
+family to `vzero`). This catches a degenerate or contradictory
 signature cheaply. It is **not** a consistency proof — only Phase 4's model
 discharges that risk.
 
@@ -605,7 +648,7 @@ pair of independently-updated classical variables), but the Fubini-regrouping
 technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 `Y * (cmem * X)`) should port directly.
 
-### 7f. §4.4's two remaining lemmas — a substrate-capability question, not an axiom
+### 7f. §4.4's two remaining lemmas — the substrate capability is landed; the lemmas are not
 
 **Update: both estimates in this section (from before this session, and
 repeated in `QEq.v`'s "Not yet here" comment) turned out to be wrong, in a
@@ -668,14 +711,28 @@ Lemma 29's converse, and `rUsplit_qidx_SL` (§7d) is a partial running start
 (it covers the single-register case; Lemma 32/29's combined-register case is
 the "third layer" above).
 
-**Open decision for the project owner, not a mid-task call:** whether to (a)
-add a countable coherent vector sum to the substrate signature, accepting
-the widened continuity boundary, so Lemma 7/29's forward direction and
-`QInit1`'s postcondition can proceed as planned; (b) restrict Lemma 29 (and
-whatever `QInit1` needs) to a special case that avoids it, if one covers
-what the EPR examples actually require; or (c) leave `QInit1` and Lemma
-29's forward direction deferred, and move on to `JointMeasureSimple` (§7e),
-which does not appear to need any of this.
+**Update: the user chose option (a).** `vsum`/`vsummable`, `schmidt_decompose`,
+and `hmem_tensor_span_component` (named `hmem_htensor_component` in
+`Theory.v`) are landed in `Interface.v`/`Theory.v` -- see §6 for the full
+account of what was added and why each piece is shaped the way it is. That
+was the substrate-capability question; it is resolved. **What is still
+open, and is ordinary proof work rather than a design question**:
+
+- Lemma 29's forward direction (apply `schmidt_decompose` to `psi1`, `psi2`;
+  use `hmem_tensor_span_component` to extract the `Q`-parts; the
+  eigenvector/operator-norm argument for showing `alpha` has modulus 1 and
+  `P2(Û1 psi1Q) = Û1 psi1Q` is the one piece of the paper's page-long proof
+  that doesn't obviously reduce to something already in the file -- worth
+  scoping carefully before starting, it may need its own auxiliary facts
+  about `oisometry`/operator norms).
+- Lemma 29's converse direction and Lemma 32, both blocked on the
+  `rWsplit2`/`Urqpair` coherence layer described above (comparable in size
+  to `rUsplit_qidx_SL`, not yet built).
+- `QInit1` itself (§7d), once Lemma 29's forward direction (or at least the
+  specific `schmidt_decompose`/`hmem_tensor_span_component` combination it
+  needs) is in hand.
+
+None of the above should need another new axiom.
 
 ### 7g. Then Phase 1e onward
 

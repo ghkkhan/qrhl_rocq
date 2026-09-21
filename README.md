@@ -329,16 +329,29 @@ additionally needs the reassociation `Ubij`'s dependent round-trip proofs over
 `HANDOFF.md` §7d. The alternative to any of this is an abstract register
 primitive (Unruh's *Registers*, CoqQ's `qreg`), a larger redesign.
 
-### Two smaller gaps in §4.4
+### Two remaining gaps in §4.4
 
 **Lemma 29 / Corollary 30** — the characterization of quantum equality on
-separable states. Needs the Schmidt decomposition (the paper's Lemma 7). The
-converse direction, which is what the examples use, is six lines and only needs
-`U₁`, `U₂` isometric.
+separable states. Needs the Schmidt decomposition, the paper's Lemma 7: `psi`
+can be decomposed as `sum_i lambda_i psi_i^X (x) psi_i^Y` for orthonormal
+`psi_i^X`, `psi_i^Y`. That is a *countable coherent vector sum*, not
+expressible via the substrate's only existing infinite-sum primitive
+(`tcp_sum`, which sums positive trace-class operators as a *mixture*, not
+vectors as a superposition) — so this needed a genuine substrate addition,
+not just one more axiom in the existing vocabulary. `vsum`/`vsummable`,
+`schmidt_decompose`, and the accompanying extraction fact
+`hmem_tensor_span_component` are now in `Interface.v`/`Theory.v`, kept as
+narrow as the need actually is (see `HANDOFF.md` §6/§7f for the design and
+why each piece is shaped that way). The lemma's proof itself is not yet
+built; nor is its converse direction, which turns out *not* to be the "six
+lines, isometries only" the paper's argument suggests for this encoding —
+see `HANDOFF.md` §7f.
 
 **Lemma 32** — used twice in the EPR derivation to simplify `QApply1`'s
 preconditions. Needs coherence between a lift over one register and a lift over
-a larger one containing it — i.e. item (3) above.
+a larger one containing it — i.e. item (3) above; `rUsplit_qidx_SL`
+(`Registers.v`) covers the single-register case this needs but not the
+combined-register one.
 
 ## Building
 

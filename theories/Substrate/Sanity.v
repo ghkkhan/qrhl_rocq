@@ -147,4 +147,31 @@ Module Sanity (S : HILBERT_SUBSTRATE).
     apply C1_neq_C0; exact Hcontra.
   Qed.
 
+  (* ------------------------------------------------------------------ *)
+  (** ** 6. [vsum]/[schmidt_decompose] do not collapse to [vzero]
+
+      [vsum] is characterized only indirectly (its value is pinned down by
+      [schmidt_decompose] and [hmem_tensor_span_component], never given a
+      general formula), so a degenerate signature could in principle make
+      every summable family sum to [vzero] without contradicting either
+      axiom's *type*. It cannot: [schmidt_decompose] applied to the (plainly
+      nonzero) product ket [tensorv (ket true) (ket true)] returns a family
+      whose [vsum] *is* that ket, by the axiom's own equation, so [vsum]
+      genuinely reconstructs a nonzero vector here. *)
+  Theorem canary_vsum_nondegenerate :
+    exists (I : Type) (F : I -> l2 (Q * Q)), vsum F <> vzero.
+  Proof.
+    set (psi := tensorv (@ket Q true) (ket true)).
+    assert (Hpsi : psi <> vzero).
+    { intros Heq.
+      assert (Hc : inner psi psi = C0) by (rewrite Heq; apply inner_vzero_r).
+      unfold psi in Hc; rewrite inner_tensorv, inner_ket_same in Hc.
+      apply C1_neq_C0; rewrite <- Hc; ring.
+    }
+    destruct (schmidt_decompose Q Q psi)
+      as [I [lam [a [b [_ [_ [_ [_ [_ [_ Heq]]]]]]]]]].
+    exists I, (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))).
+    rewrite <- Heq; exact Hpsi.
+  Qed.
+
 End Sanity.

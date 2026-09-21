@@ -755,6 +755,23 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply hmem_htensor; [ apply H1 | apply H2 ]; assumption.
   Qed.
 
+  (** The named-[htensor] form of [hmem_tensor_span_component]: a coherent
+      countable sum of pure products lying in [W (x) l2[Y]] (unrestricted on
+      the second factor) has each first factor in [W], given the second
+      factors are pairwise orthogonal and individually nonzero. Needed by
+      Lemma 29's characterization of quantum equality on separable states
+      and by rule QInit1's postcondition; see [Interface.v] for why this is
+      not derivable from [schmidt_decompose] alone. *)
+  Lemma hmem_htensor_component {X Y J} (W : hspace X) (a : J -> l2 X) (b : J -> l2 Y) (j0 : J) :
+    vsummable (fun j => tensorv (a j) (b j)) ->
+    (forall i j, i <> j -> inner (b i) (b j) = C0) ->
+    (forall j, b j <> vzero) ->
+    hmem (vsum (fun j => tensorv (a j) (b j))) (htensor W htop) ->
+    hmem (a j0) W.
+  Proof.
+    unfold htensor; apply hmem_tensor_span_component.
+  Qed.
+
   Lemma htensor_hbot_l {X Y} (T : hspace Y) : htensor (@hbot X) T = hbot.
   Proof.
     apply hle_antisym; [| apply hbot_le ].
