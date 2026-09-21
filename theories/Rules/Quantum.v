@@ -82,6 +82,68 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   End OneSided.
 
   (* ================================================================= *)
+  (** ** Witnesses that discard a register and replace it
+
+      [QInit1]'s witness, unlike every rule in [OneSided], is not a
+      conjugation: it discards side 1's copy of the register [P] and tensors
+      in a fresh state, mirroring [sem_qinit] one level up (acting on the
+      first factor of [qmem * qmem] rather than on [qmem] itself). Discarding
+      a register nested inside one factor of a pair needs the plain-product
+      associator [Uprodassoc] to bring that register to the outside where
+      [tcp_ptrace2] can reach it, and to put it back afterwards. *)
+
+  Section OneSidedDiscard.
+    Context (P : qset) (psi : rcmem -> l2 (qsub P))
+            (Hpsi : forall rm, inner (psi rm) (psi rm) = C1).
+
+    Definition qinitL_op (rm : rcmem) (rho : tcp (qmem * qmem)) : tcp (qmem * qmem) :=
+      tcp_conj (tensoro (Usplit P) oid)
+        (tcp_conj (oadj Uprodassoc)
+           (tcp_tensor (tcp_proj (psi rm))
+              (tcp_ptrace2 (tcp_conj Uprodassoc
+                 (tcp_conj (tensoro (oadj (Usplit P)) oid) rho))))).
+
+    Definition qinitL (r : rcqs) : rcqs :=
+      fun rm => tcp_conj (oadj Urqpair) (qinitL_op rm (tcp_conj Urqpair (r rm))).
+
+    (** [qinitL_op] is trace-preserving (not merely non-increasing): every
+        step is conjugation by an isometry except the one place the fresh
+        state is tensored in, and [psi]'s normalization exactly cancels the
+        one place a trace could otherwise change. *)
+    Lemma qinitL_op_trace (rm : rcmem) (rho : tcp (qmem * qmem)) :
+      tcp_trace (qinitL_op rm rho) = tcp_trace rho.
+    Proof.
+      unfold qinitL_op.
+      rewrite (tcp_trace_conj_isometry _ _ _ _
+                 (oisometry_tensoro_l (Usplit P)
+                    (ounitary_isometry _ (Wsplit_unitary qvar qtype P)))).
+      rewrite (tcp_trace_conj_isometry _ _ _ _
+                 (oisometry_oadj Uprodassoc Uprodassoc_unitary)).
+      rewrite tcp_trace_tensor, tcp_trace_proj, (Hpsi rm).
+      replace (Cre C1) with 1%R by reflexivity; rewrite Rmult_1_l.
+      rewrite tcp_ptrace2_trace.
+      rewrite (tcp_trace_conj_isometry _ _ _ _
+                 (ounitary_isometry _ Uprodassoc_unitary)).
+      apply (tcp_trace_conj_isometry _ _ _ _
+               (oisometry_tensoro_l (oadj (Usplit P))
+                  (oisometry_oadj (Usplit P) (Wsplit_unitary qvar qtype P)))).
+    Qed.
+
+    Lemma qinitL_wf (r : rcqs) : rcqs_wf r -> rcqs_wf (qinitL r).
+    Proof.
+      intros Hr; apply tcp_summable_trace.
+      assert (Heq : (fun rm => tcp_trace (qinitL r rm)) = (fun rm => tcp_trace (r rm))).
+      { apply funext; intros rm; unfold qinitL.
+        rewrite (tcp_trace_conj_isometry _ _ _ _
+                   (oisometry_oadj Urqpair Urqpair_unitary)).
+        rewrite qinitL_op_trace.
+        apply (tcp_trace_conj_isometry _ _ _ _ (ounitary_isometry _ Urqpair_unitary)). }
+      rewrite Heq; apply tcp_summable_trace; exact Hr.
+    Qed.
+
+  End OneSidedDiscard.
+
+  (* ================================================================= *)
   (** ** QApply1  [Figure 3, Lemma 65, p. 74]
 
 <<
