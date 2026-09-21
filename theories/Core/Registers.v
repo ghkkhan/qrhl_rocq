@@ -390,6 +390,57 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     - discriminate.
   Qed.
 
+  (** The complement of one side's copy of a register splits into that side's
+      copy of the register's own complement, disjointly from the other side
+      (which is untouched). This is the load-bearing identity for reconciling
+      the relational register split with the side-split-then-register-split
+      picture -- see [QInit1] / Lemma 32. *)
+  Lemma rqneg_qidx (Q : qset) :
+    rqneg (qidx SL Q) = wunion rqvar (qidx SL (qneg Q)) (qidx SR (fun _ => true)).
+  Proof.
+    apply funext; intros [s q]; unfold wneg, wunion, qidx, qneg;
+      cbn [fst snd]; destruct s; cbn; destruct (Q q); reflexivity.
+  Qed.
+
+  (** One side's copy of a register is just that register, relabeled: the
+      unit-padding a relational register carries over the *other* side is
+      pure overhead, since [qidx s Q] is false everywhere on that side. This
+      is the other piece the reassociation needs, alongside [rqneg_qidx]. *)
+  Definition Urelab_fwd (s : side) (Q : qset) : rqsub (qidx s Q) -> qsub Q :=
+    match s as s0 return rqsub (qidx s0 Q) -> qsub Q with
+    | SL => fun m q => m (SL, q)
+    | SR => fun m q => m (SR, q)
+    end.
+
+  Definition Urelab_bwd (s : side) (Q : qset) : qsub Q -> rqsub (qidx s Q) :=
+    match s as s0 return qsub Q -> rqsub (qidx s0 Q) with
+    | SL => fun m w => match w as w' return (if qidx SL Q w' then rqtype w' else unit) with
+                        | (SL, q) => m q
+                        | (SR, q) => tt
+                        end
+    | SR => fun m w => match w as w' return (if qidx SR Q w' then rqtype w' else unit) with
+                        | (SL, q) => tt
+                        | (SR, q) => m q
+                        end
+    end.
+
+  Lemma Urelab_fwd_bwd (s : side) (Q : qset) (m : qsub Q) :
+    Urelab_fwd s Q (Urelab_bwd s Q m) = m.
+  Proof. destruct s; reflexivity. Qed.
+
+  Lemma Urelab_bwd_fwd (s : side) (Q : qset) (m : rqsub (qidx s Q)) :
+    Urelab_bwd s Q (Urelab_fwd s Q m) = m.
+  Proof.
+    destruct s; apply funext; intros [t q]; destruct t; try reflexivity;
+      match goal with |- _ = ?x => destruct x; reflexivity end.
+  Qed.
+
+  Definition Urelab (s : side) (Q : qset) : op (rqsub (qidx s Q)) (qsub Q) :=
+    Ubij (Urelab_fwd s Q) (Urelab_bwd s Q) (Urelab_bwd_fwd s Q) (Urelab_fwd_bwd s Q).
+
+  Lemma Urelab_unitary (s : side) (Q : qset) : ounitary (Urelab s Q).
+  Proof. apply Ubij_ounitary. Qed.
+
   (* ================================================================= *)
   (** ** Splitting the relational memory into its two sides
 
