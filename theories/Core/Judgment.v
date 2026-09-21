@@ -1235,6 +1235,54 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       rewrite rcqs_projR_rdirac, (rtcpR_rprod v w Hv); reflexivity.
   Qed.
 
+  (** A single pure, normalized point mass, scaled by a nonnegative real and
+      fed through [qrhl_pure], produces a witness for the correspondingly
+      scaled point masses -- even when the scale is [0], in which case no
+      membership hypothesis is needed (the zero witness works
+      unconditionally). This is the per-component step the converse of
+      Lemma 36 assembles into a sum over its spectral decomposition. *)
+  Lemma pure_scaled_witness (A B : pred) (c d : prog) (m1 m2 : cmem)
+        (u u' : l2 qmem) (a : R) :
+    wt c -> wt d -> qrhl_pure A c d B ->
+    inner u u = C1 -> inner u' u' = C1 -> (0 <= a)%R ->
+    (a <> 0%R -> hmem (rprod u u') (ev A (m1, m2))) ->
+    exists r' : rcqs,
+      rcqs_wf r' /\ rcqs_sep r' /\ psat r' B
+      /\ rcqs_projL r' = denote c (cqs_scale a (cqdirac m1 (tcp_proj u)))
+      /\ rcqs_projR r' = denote d (cqs_scale a (cqdirac m2 (tcp_proj u'))).
+  Proof.
+    intros Hwtc Hwtd Hpure Hu Hu' Ha Hmem.
+    destruct (classic (a = 0%R)) as [-> | Hane].
+    - exists (rdirac (m1, m2) tcp_zero); repeat split.
+      + apply rdirac_wf.
+      + apply rdirac_sep, rsep_zero.
+      + intros rm; unfold rdirac.
+        destruct (excluded_middle_informative (rm = (m1, m2)));
+          rewrite (proj2 (tcp_supp_eq0 _ _) eq_refl); apply hbot_le.
+      + rewrite (denote_scale c Hwtc 0%R (cqdirac m1 (tcp_proj u)) (Rle_refl 0%R)
+                   (cqdirac_wf m1 (tcp_proj u))).
+        apply funext; intros m'; unfold cqs_scale.
+        rewrite tcp_scale_0, rcqs_projL_rdirac, rtcpL_zero.
+        unfold cqdirac; destruct (excluded_middle_informative (m' = m1)); reflexivity.
+      + rewrite (denote_scale d Hwtd 0%R (cqdirac m2 (tcp_proj u')) (Rle_refl 0%R)
+                   (cqdirac_wf m2 (tcp_proj u'))).
+        apply funext; intros m'; unfold cqs_scale.
+        rewrite tcp_scale_0, rcqs_projR_rdirac, rtcpR_zero.
+        unfold cqdirac; destruct (excluded_middle_informative (m' = m2)); reflexivity.
+    - destruct (Hpure m1 m2 u u' Hu Hu' (Hmem Hane))
+        as [r0 [Hwf0 [Hsep0 [Hsat0 [HL0 HR0]]]]].
+      exists (rcqs_scale a r0); repeat split.
+      + apply rcqs_scale_wf; assumption.
+      + apply rcqs_scale_sep; assumption.
+      + apply rcqs_scale_psat; assumption.
+      + rewrite (rcqs_projL_scale a r0 Hwf0), HL0.
+        symmetry; apply (denote_scale c Hwtc a (cqdirac m1 (tcp_proj u)) Ha
+                            (cqdirac_wf m1 (tcp_proj u))).
+      + rewrite (rcqs_projR_scale a r0 Hwf0), HR0.
+        symmetry; apply (denote_scale d Hwtd a (cqdirac m2 (tcp_proj u')) Ha
+                            (cqdirac_wf m2 (tcp_proj u'))).
+  Qed.
+
   (* ================================================================= *)
   (** ** Lemma 36, converse direction -- OUTSTANDING
 
