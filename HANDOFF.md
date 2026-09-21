@@ -220,8 +220,8 @@ plus `tcp_sep_sum` and the one-sided reindexing `rbeta`.
 **Rules** — `Skip` (Lem 54), `Conseq` (Lem 46), `Seq` (Lem 47), `Case`
 (Lem 48, needing only well-typedness), `QrhlElim` and its equality form
 (Lem 50), `Assign1` (Lem 55),
-`Sample1` (Lem 56), `If1` (Lem 58), `JointIf` (Lem 59), `Measure1` (Lem 62),
-`QApply1` (Lem 65).
+`Sample1` (Lem 56), `If1` (Lem 58), `JointIf` (Lem 59), `JointWhile` (Lem 61),
+`Measure1` (Lem 62), `QApply1` (Lem 65).
 
 ---
 
@@ -365,8 +365,8 @@ instead.
 
 Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on 7c),
 Phase 2's remaining structural rules (`Sym`, `Frame`, `Equal`, `QrhlElimEq`)
-and `While1`/`JointWhile` (whose semantic groundwork — the telescoping bound
-and the loop clauses of all three inductions — is now in place), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and Phase 4's
+and `While1` (`JointWhile` is done; `While1` is the harder one, needing
+Definition 22's totality and a locality condition), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and Phase 4's
 finite-dimensional model — which is the only thing that turns "sound relative
 to a signature" into "sound".
 

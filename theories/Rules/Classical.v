@@ -905,6 +905,174 @@ Module ClassicalRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ================================================================= *)
+  (** ** JointWhile  [Figure 2, Lemma 61, p. 68]
+
+<<
+         A subseteq Cla[idx_1 e_1 = idx_2 e_2]
+         {Cla[idx_1 e_1 /\ idx_2 e_2] cap A} c ~ d {A}
+        ------------------------------------------------------------
+         {A} while e1 do c ~ while e2 do d
+             {Cla[~idx_1 e_1 /\ ~idx_2 e_2] cap A}
+>>
+
+      Unlike [While1], this rule asks for no termination condition: the two
+      loops run in lockstep, so whatever probability mass fails to leave the
+      loop fails to leave it on both sides, and the two marginals stay equal
+      to each other without either having to be total.
+
+      [A] is the loop invariant. Starting from the given state, one turn of
+      the loop is: restrict to where the guard holds, hand that to the
+      hypothesis, and take the witness -- which again satisfies [A], so the
+      turn can be repeated. What leaves the loop at each turn is the part
+      where the guard fails, and the witness for the whole judgment is the sum
+      of those exits over all turns.
+
+      The trace bookkeeping is exactly the telescoping estimate that
+      [sem_while_wf_trace] uses, one level up: the exits at all turns together
+      weigh no more than the state we started with, because the body does not
+      increase the trace and a witness has the total trace of its own left
+      projection. *)
+
+  Definition good (A : pred) (s : rcqs) : Prop :=
+    rcqs_wf s /\ rcqs_sep s /\ psat s A.
+
+  Theorem rule_JointWhile (e1 e2 : expr bool) (c d : prog) (A : pred) :
+    wt c -> wt d ->
+    ple A (guards_agree e1 e2) ->
+    qrhl (pmeet (Cla (gmap2 andb (idx SL e1) (idx SR e2))) A) c d A ->
+    qrhl A (While e1 c) (While e2 d)
+         (pmeet (Cla (gmap2 andb (gmap negb (idx SL e1))
+                                 (gmap negb (idx SR e2)))) A).
+  Proof.
+    intros Hwtc Hwtd HA Hbody r Hwf0 Hsep0 Hsat0.
+    (* the guards agree wherever a state satisfying [A] is nonzero *)
+    assert (Hag : forall s, psat s A -> forall rm, s rm <> tcp_zero ->
+                            ev e1 (csel SL rm) = ev e2 (csel SR rm)).
+    { intros s Hs rm Hnz.
+      pose proof (proj1 (psat_Cla s _)
+                    (psat_mono s A (guards_agree e1 e2) HA Hs) rm Hnz) as Hc.
+      change (ev (gmap2 Bool.eqb (idx SL e1) (idx SR e2)) rm)
+        with (Bool.eqb (ev e1 (csel SL rm)) (ev e2 (csel SR rm))) in Hc.
+      destruct (ev e1 (csel SL rm)), (ev e2 (csel SR rm));
+        solve [ reflexivity | discriminate Hc ]. }
+    (* ------------------------------------------------------------- *)
+    (* one turn of the loop *)
+    assert (Hnext : forall s : rcqs, good A s ->
+              { s' : rcqs | good A s'
+                /\ rcqs_projL s' = denote c (restr e1 (rcqs_projL s))
+                /\ rcqs_projR s' = denote d (restr e2 (rcqs_projR s)) }).
+    { intros s [Hwfs [Hseps Hsats]].
+      apply constructive_indefinite_description.
+      assert (Hpt : psat (rrestr (idx SL e1) s)
+                         (Cla (gmap2 andb (idx SL e1) (idx SR e2)))).
+      { apply psat_Cla; intros rm Hnz.
+        destruct (rrestr_nz _ _ _ Hnz) as [Hg Hrn].
+        change (ev (idx SL e1) rm) with (ev e1 (csel SL rm)) in Hg.
+        change (ev (gmap2 andb (idx SL e1) (idx SR e2)) rm)
+          with (andb (ev e1 (csel SL rm)) (ev e2 (csel SR rm))).
+        rewrite <- (Hag s Hsats rm Hrn), Hg; reflexivity. }
+      destruct (Hbody (rrestr (idx SL e1) s) (rrestr_wf _ _ Hwfs)
+                  (rrestr_sep _ _ Hseps)
+                  (proj2 (psat_pmeet _ _ A)
+                     (conj Hpt (rrestr_psat _ _ A Hsats))))
+        as [s' [Hwf' [Hsep' [Hsat' [HL HR]]]]].
+      exists s'; split; [ split; [ exact Hwf' | split; assumption ] |].
+      split.
+      - rewrite HL, rcqs_projL_rrestr; reflexivity.
+      - rewrite HR, (rcqs_projR_rrestr_swap e1 e2 s (Hag s Hsats)); reflexivity. }
+    (* ------------------------------------------------------------- *)
+    (* the sequence of states at the top of each turn *)
+    pose (nxt := fun p : sig (good A) =>
+                   exist (good A)
+                     (proj1_sig (Hnext (proj1_sig p) (proj2_sig p)))
+                     (proj1 (proj2_sig
+                               (Hnext (proj1_sig p) (proj2_sig p))))).
+    pose (P := fun i : nat =>
+                 Nat.iter i nxt
+                   (exist (good A) r (conj Hwf0 (conj Hsep0 Hsat0)))).
+    pose (R := fun i : nat => proj1_sig (P i)).
+    assert (HgoodR : forall i, good A (R i)) by (intros i; apply (proj2_sig (P i))).
+    assert (HwfR : forall i, rcqs_wf (R i)) by (intros i; apply (HgoodR i)).
+    assert (HsatR : forall i, psat (R i) A)
+      by (intros i; apply (proj2 (proj2 (HgoodR i)))).
+    assert (HLstep : forall i,
+               rcqs_projL (R (S i)) = denote c (restr e1 (rcqs_projL (R i))))
+      by (intros i;
+          exact (proj1 (proj2 (proj2_sig (Hnext (R i) (proj2_sig (P i))))))).
+    assert (HRstep : forall i,
+               rcqs_projR (R (S i)) = denote d (restr e2 (rcqs_projR (R i))))
+      by (intros i;
+          exact (proj2 (proj2 (proj2_sig (Hnext (R i) (proj2_sig (P i))))))).
+    assert (HLiter : forall i,
+               rcqs_projL (R i) = witer e1 (denote c) (rcqs_projL r) i).
+    { intros i; induction i as [| n IH]; [ reflexivity |].
+      rewrite HLstep, IH; reflexivity. }
+    assert (HRiter : forall i,
+               rcqs_projR (R i) = witer e2 (denote d) (rcqs_projR r) i).
+    { intros i; induction i as [| n IH]; [ reflexivity |].
+      rewrite HRstep, IH; reflexivity. }
+    (* ------------------------------------------------------------- *)
+    (* the exits, and the telescoping bound on their total weight *)
+    pose (X := fun i : nat => rrestrn (idx SL e1) (R i)).
+    assert (Hstep : forall i,
+               (rcqs_trace (X i) + rcqs_trace (R (S i))
+                <= rcqs_trace (R i))%R).
+    { intros i.
+      pose proof (rcqs_trace_rrestr_split (idx SL e1) (R i) (HwfR i)) as Hsp.
+      assert (Hb : (rcqs_trace (R (S i))
+                    <= rcqs_trace (rrestr (idx SL e1) (R i)))%R).
+      { rewrite <- (rcqs_trace_projL (R (S i)) (HwfR (S i))).
+        rewrite <- (rcqs_trace_projL _ (rrestr_wf (idx SL e1) (R i) (HwfR i))).
+        rewrite rcqs_projL_rrestr, HLstep.
+        apply (denote_trace_le c Hwtc), restr_wf, rcqs_projL_wf, HwfR. }
+      unfold X; lra. }
+    assert (Htel : forall n,
+               (lsum (fun i => rcqs_trace (X i)) (seq 0 n)
+                + rcqs_trace (R n) <= rcqs_trace r)%R).
+    { intros n; induction n as [| n IH]; [ cbn; unfold R, P; cbn; lra |].
+      rewrite seq_S, lsum_app; cbn [lsum].
+      pose proof (Hstep n) as Hs.
+      replace (0 + n)%nat with n by apply Nat.add_0_l.
+      lra. }
+    assert (Hfam : rcqs_fam X).
+    { unfold rcqs_fam.
+      refine (proj1 (tsum_pairs_le_iter
+                       (fun (i : nat) (rm : rcmem) => tcp_trace (X i rm)) _ _)).
+      - intros i; apply tcp_summable_trace, rrestrn_wf, HwfR.
+      - apply (proj1 (nat_summable_of_seq
+                        (fun i : nat => rcqs_trace (X i)) (rcqs_trace r)
+                        (fun i => tsum_nonneg _ (fun rm => tcp_trace_nonneg _ _))
+                        (fun n => ltac:(pose proof (Htel n);
+                                        pose proof (tsum_nonneg
+                                          (fun rm => tcp_trace (R n rm))
+                                          (fun rm => tcp_trace_nonneg _ _));
+                                        unfold rcqs_trace in *; lra)))). }
+    (* ------------------------------------------------------------- *)
+    exists (rcqs_sum X); repeat split.
+    - apply rcqs_sum_wf; exact Hfam.
+    - apply rcqs_sum_sep; [ exact Hfam | intros i; apply rrestrn_sep, (HgoodR i) ].
+    - apply rcqs_sum_psat; [ exact Hfam |].
+      intros i; apply psat_pmeet; split.
+      + apply psat_Cla; intros rm Hnz.
+        destruct (rrestrn_nz _ _ _ Hnz) as [Hg Hrn].
+        change (ev (idx SL e1) rm) with (ev e1 (csel SL rm)) in Hg.
+        change (ev (gmap2 andb (gmap negb (idx SL e1))
+                               (gmap negb (idx SR e2))) rm)
+          with (andb (negb (ev e1 (csel SL rm))) (negb (ev e2 (csel SR rm)))).
+        rewrite <- (Hag (R i) (HsatR i) rm Hrn), Hg; reflexivity.
+      + apply rrestrn_psat, (HsatR i).
+    - rewrite (rcqs_projL_sum X Hfam); cbn [denote].
+      rewrite (sem_while_sum e1 (denote c) (rcqs_projL r)).
+      f_equal; apply funext; intros i; unfold X.
+      rewrite rcqs_projL_rrestrn, HLiter; reflexivity.
+    - rewrite (rcqs_projR_sum X Hfam); cbn [denote].
+      rewrite (sem_while_sum e2 (denote d) (rcqs_projR r)).
+      f_equal; apply funext; intros i; unfold X.
+      rewrite (rcqs_projR_rrestrn_swap e1 e2 (R i) (Hag (R i) (HsatR i))),
+              HRiter; reflexivity.
+  Qed.
+
+  (* ================================================================= *)
   (** ** Still to come in Figure 2
 
       The right-hand projection of [assignL], and with it rule [Assign1]

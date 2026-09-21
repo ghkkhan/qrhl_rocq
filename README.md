@@ -81,10 +81,10 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
 | 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
-| 2 | `QrhlElim` (Lemma 50) and its equality form | **done** (ahead of its phase) |
+| 2 | `QrhlElim` (Lemma 50) and its equality form, `JointWhile` (Lemma 61) | **done** (ahead of their phase) |
 | 1d | the other 3 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
-| 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
+| 2 | `Sym` `Frame` `Equal` `QrhlElimEq`, `While1` | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
 | 4 | finite-dimensional model | not started |
 
@@ -212,6 +212,18 @@ guessed):
 
 The converse of Lemma 36 is the natural next one: `denote_sum` and the
 `rcqs_fam` machinery `Case` needed are exactly what it was waiting on.
+
+`JointWhile` (Lemma 61) is proved, also ahead of its phase, because the loop
+clause of the three inductions made it reachable. It needs no termination
+condition — the two loops run in lockstep, so whatever mass fails to leave the
+loop fails to leave on both sides, and the marginals stay equal without either
+being total. `A` is the loop invariant: one turn restricts to where the guard
+holds, hands that to the hypothesis, and takes the witness, which again
+satisfies `A`. The witness for the whole judgment is the sum, over all turns,
+of the part that leaves the loop at that turn, and the trace bookkeeping is the
+same telescoping estimate as `sem_while_wf_trace` one level up. `While1` is the
+harder of the two: the paper gives it a termination side condition
+(Definition 22) and a locality condition, neither of which exists yet.
 
 ### The register-coherence question — needs a decision
 

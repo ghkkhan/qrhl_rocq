@@ -368,6 +368,21 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       [ split; [ reflexivity | exact H ] | congruence ].
   Qed.
 
+  Lemma rcqs_trace_rrestr_split (e : rexpr bool) (s : rcqs) :
+    rcqs_wf s ->
+    (rcqs_trace (rrestr e s) + rcqs_trace (rrestrn e s))%R = rcqs_trace s.
+  Proof.
+    intros Hs; unfold rcqs_trace.
+    rewrite <- (tsum_add (fun rm => tcp_trace (rrestr e s rm))
+                         (fun rm => tcp_trace (rrestrn e s rm))
+                         (fun rm => tcp_trace_nonneg _ _)
+                         (fun rm => tcp_trace_nonneg _ _)
+                         (proj1 (tcp_summable_trace _ _ _) (rrestr_wf e s Hs))
+                         (proj1 (tcp_summable_trace _ _ _) (rrestrn_wf e s Hs))).
+    f_equal; apply funext; intros rm; unfold rrestr, rrestrn.
+    destruct (ev e rm); rewrite tcp_trace_zero; lra.
+  Qed.
+
   Lemma rrestrn_nz (e : rexpr bool) (r : rcqs) (rm : rcmem) :
     rrestrn e r rm <> tcp_zero -> ev e rm = false /\ r rm <> tcp_zero.
   Proof.
