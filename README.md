@@ -76,11 +76,12 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1b | semantics `⟦c⟧`, `Pr[e : c(ρ)]`, point-mass laws | **done** |
 | 1b | `denote_wf_trace`: `⟦c⟧` is a cq-superoperator | **done** for loop-free programs |
 | 1b | `denote_add`: `⟦c⟧` is additive | **done** for loop-free programs |
+| 1b | `denote_sum`: `⟦c⟧` is normal (`⟦c⟧(∑ⱼρⱼ) = ∑ⱼ⟦c⟧ρⱼ`) | **done** for loop-free programs |
 | 1c | predicates (Def 13/14/16/18/20/23, Lem 15/17/24/25) | **done** |
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
-| 1d | `Skip` `Conseq` `Seq` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
-| 1d | the other 4 vertical-slice rules | in progress, see below |
+| 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
+| 1d | the other 3 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
 | 3 | `Trans` `JointMeasure` `Adversary`, ROR-OT-CPA | not started |
@@ -138,6 +139,24 @@ is exactly why the right-hand projection comes back unchanged.
 loop-free programs, which is what lets a state be split and the pieces
 recombined.
 
+`denote_sum` — normality of `⟦c⟧`, i.e. `⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ` for an
+arbitrary index type — is proved for loop-free programs. The three clauses
+with a sum of their own (assignment, sampling, measurement) are where the work
+is: there the statement's sum and the family's sum have to be exchanged, which
+is `tcp_sum_swap` and so needs all four of its summability side conditions. It
+took one new axiom, normality of the tensor in the factor that varies, for the
+`Q ←q e` clause.
+
+On top of it, `Case` is proved. The state is cut into the pieces on which the
+expression takes each value; at a given memory exactly one piece survives, so
+the pieces sum back to the original. `Core/Judgment.v` now has the general
+machinery for summed families of relational states (`rcqs_fam`, `rcqs_sum`,
+well-formedness, separability, satisfaction, and normality of both
+projections), which is also precisely what the converse of Lemma 36 was
+waiting on. Note that `Case` carries `wt`/`loopfree` side conditions the
+paper's rule does not: they come from `denote_sum`, and go away once the
+`while` clause is added to that induction.
+
 `Measure1` completes the family of one-sided rules. Its shape is `Sample1`'s
 with a conjugation by the outcome's projector where the subdistribution's
 weight was, so it reuses `rbeta` verbatim; what is new is the two ends. On the
@@ -160,12 +179,13 @@ guessed):
 | ~~`If1`, `JointIf`~~ | **done** — needed no new axioms |
 | ~~`Sample1`~~ | **done** |
 | ~~`Measure1`~~ | **done** — four textbook axioms: a projector fixes its image, `Meas(D,X)⊗id ⊆ Meas(D,X⊗Y)` (bounded and total forms), and that a total measurement on one factor leaves the other factor's reduced state alone |
-| `Case` | `denote` **normality** (`⟦c⟧(∑ⱼ ρⱼ) = ∑ⱼ ⟦c⟧ρⱼ`), not just additivity: the case split is over an arbitrary result type, not two branches |
+| ~~`Case`~~ | **done** — needed `denote_sum`; carries `wt`/`loopfree` side conditions until the loop clause is added |
 | `QInit1` | abstract superoperators — initialization discards a register and prepares a fresh state, which is a channel, not a conjugation |
 | `JointSample` | a two-sided reindexing: the witness updates `x₁` and `y₂` together along a coupling, so `rbeta` has to be replaced by its joint analogue |
 | `JointMeasureSimple` | the same, plus the quantum equality `Q′₁ ≡quant Q′₂` in the precondition |
 
-`Case` is the natural next one: it also unblocks the converse of Lemma 36.
+The converse of Lemma 36 is the natural next one: `denote_sum` and the
+`rcqs_fam` machinery `Case` needed are exactly what it was waiting on.
 
 ### Two smaller gaps in §4.4
 

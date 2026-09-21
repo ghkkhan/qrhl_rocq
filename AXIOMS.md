@@ -296,6 +296,7 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_tensor_proj` | `forall X Y (v : l2 X) (w : l2 Y), tcp_tensor (tcp_proj v) (tcp_proj w) = tcp_proj (tensorv v w)` |
 | Axiom | `tcp_scale_tensor_l` | `forall X Y (a : R) (r : tcp X) (s : tcp Y), tcp_scale a (tcp_tensor r s) = tcp_tensor (tcp_scale a r) s` |
 | Axiom | `tcp_tensor_add_r` | `forall X Y (r : tcp X) (s t : tcp Y), tcp_tensor r (tcp_add s t) = tcp_add (tcp_tensor r s) (tcp_tensor r t)` |
+| Axiom | `tcp_tensor_sum_r` | `forall X Y J (r : tcp X) (F : J -> tcp Y), tcp_summable F -> tcp_tensor r (tcp_sum F) = tcp_sum (fun j => tcp_tensor r (F j))` |
 | Axiom | `tcp_summable_trace` | `forall X J (F : J -> tcp X), tcp_summable F <-> summable (fun j => tcp_trace (F j))` |
 | Axiom | `tcp_trace_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_trace (tcp_sum F) = tsum (fun j => tcp_trace (F j))` |
 | Axiom | `tcp_sum_ub` | `forall X J (F : J -> tcp X) (l : list J), tcp_summable F -> NoDup l -> tcp_le (tcp_lsum F l) (tcp_sum F)` |
@@ -313,6 +314,6 @@ Generated from `theories/Substrate/Interface.v` by `scripts/gen-axioms.py`
 | Axiom | `tcp_supp_sum` | `forall X J (F : J -> tcp X), tcp_summable F -> tcp_supp (tcp_sum F) = hSup (fun j => tcp_supp (F j))` |
 | Axiom | `tcp_decompose` | `forall X (r : tcp X), exists (J : Type) (psi : J -> l2 X), tcp_summable (fun j => tcp_proj (psi j)) /\ r = tcp_sum (fun j => tcp_proj (psi j))` |
 
-**Totals: 44 parameters, 124 axioms.**
+**Totals: 44 parameters, 125 axioms.**
 
 <!-- END GENERATED INVENTORY -->

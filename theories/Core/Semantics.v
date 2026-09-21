@@ -1001,6 +1001,304 @@ Module SemTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
                (measure_inner_wf y Pq e Hwt s m' Hs)).
   Qed.
 
+  (* ================================================================= *)
+  (** ** Normality of [[c]]
+
+      [denote_add] says [[c]] is additive; rule Case (Lemma 48) needs the same
+      for a family indexed by an arbitrary type, because the case split is
+      over the values of a classical expression rather than over two branches.
+      The converse of Lemma 36 needs it for the same reason.
+
+      The clauses that have a sum of their own -- assignment, sampling,
+      measurement -- are the interesting ones: there the two sums have to be
+      exchanged, which is [tcp_sum_swap] and so needs all four of its
+      summability side conditions. *)
+
+  (** A summable family of cq-states. The single condition is joint
+      summability of the traces over (index, memory); every pointwise and
+      iterated fact below follows from it by Tonelli, and it is preserved by
+      [[c]] because [[c]] does not increase the total trace. *)
+  Definition cqs_fam {J : Type} (F : J -> cqs) : Prop :=
+    summable (fun p : J * cmem => tcp_trace (F (fst p) (snd p))).
+
+  Lemma cqs_fam_wf {J} (F : J -> cqs) : cqs_fam F -> forall j, cqs_wf (F j).
+  Proof.
+    intros H j; apply tcp_summable_trace.
+    apply (summable_inj (fun m : cmem => (j, m))
+                        (fun p : J * cmem => tcp_trace (F (fst p) (snd p))));
+      [ intros a b Hab; congruence | exact H ].
+  Qed.
+
+  Lemma cqs_fam_ptwise {J} (F : J -> cqs) :
+    cqs_fam F -> forall m, tcp_summable (fun j => F j m).
+  Proof.
+    intros H m; apply tcp_summable_trace.
+    apply (summable_inj (fun j : J => (j, m))
+                        (fun p : J * cmem => tcp_trace (F (fst p) (snd p))));
+      [ intros a b Hab; congruence | exact H ].
+  Qed.
+
+  Lemma cqs_fam_trace {J} (F : J -> cqs) :
+    cqs_fam F -> summable (fun j => cqs_trace (F j)).
+  Proof.
+    intros H.
+    destruct (tsum_iter_le_pairs (fun (j : J) (m : cmem) => tcp_trace (F j m))
+                (fun p => tcp_trace_nonneg _ _) H) as [Hit _].
+    exact Hit.
+  Qed.
+
+  Lemma cqs_fam_sum_wf {J} (F : J -> cqs) : cqs_fam F -> cqs_wf (cqs_sum F).
+  Proof.
+    intros H; apply tcp_summable_trace.
+    assert (Heq : (fun m => tcp_trace (cqs_sum F m))
+                  = (fun m : cmem => tsum (fun j => tcp_trace (F j m))))
+      by (apply funext; intros m; unfold cqs_sum;
+          apply (tcp_trace_sum _ _ _ (cqs_fam_ptwise F H m))).
+    rewrite Heq.
+    (* the same joint summability, with the two indices the other way round *)
+    assert (Hsw : summable (fun q : cmem * J => tcp_trace (F (snd q) (fst q)))).
+    { apply (summable_inj (fun q : cmem * J => (snd q, fst q))
+                          (fun p : J * cmem => tcp_trace (F (fst p) (snd p)))).
+      - intros [m1 j1] [m2 j2] Hq; cbn in Hq; congruence.
+      - exact H. }
+    destruct (tsum_iter_le_pairs (fun (m : cmem) (j : J) => tcp_trace (F j m))
+                (fun q => tcp_trace_nonneg _ _) Hsw) as [Hit _].
+    exact Hit.
+  Qed.
+
+  Lemma cqs_fam_restr {J} (e : expr bool) (F : J -> cqs) :
+    cqs_fam F -> cqs_fam (fun j => restr e (F j)).
+  Proof.
+    intros H; unfold cqs_fam.
+    apply (summable_mono _ (fun p : J * cmem => tcp_trace (F (fst p) (snd p))));
+      [ exact H |].
+    intros [j m]; cbn [fst snd]; unfold restr.
+    destruct (ev e m);
+      [ apply Rle_refl | rewrite tcp_trace_zero; apply tcp_trace_nonneg ].
+  Qed.
+
+  Lemma cqs_fam_restrn {J} (e : expr bool) (F : J -> cqs) :
+    cqs_fam F -> cqs_fam (fun j => restrn e (F j)).
+  Proof.
+    intros H; unfold cqs_fam.
+    apply (summable_mono _ (fun p : J * cmem => tcp_trace (F (fst p) (snd p))));
+      [ exact H |].
+    intros [j m]; cbn [fst snd]; unfold restrn.
+    destruct (ev e m);
+      [ rewrite tcp_trace_zero; apply tcp_trace_nonneg | apply Rle_refl ].
+  Qed.
+
+  Lemma cqs_fam_denote {J} (F : J -> cqs) (c : prog) :
+    wt c -> loopfree c -> cqs_fam F -> cqs_fam (fun j => denote c (F j)).
+  Proof.
+    intros Hwt Hlf H; unfold cqs_fam.
+    refine (proj1 (tsum_pairs_le_iter
+                     (fun (j : J) (m : cmem) => tcp_trace (denote c (F j) m))
+                     _ _)).
+    - intros j; apply tcp_summable_trace.
+      apply (denote_wf c Hwt Hlf), (cqs_fam_wf F H j).
+    - apply (summable_mono _ (fun j => cqs_trace (F j)));
+        [ apply cqs_fam_trace; exact H |].
+      intros j; apply (proj2 (denote_wf_trace c Hwt Hlf _ (cqs_fam_wf F H j))).
+  Qed.
+
+  (** Sums of families, pointwise. *)
+  Lemma cqs_sum_add {J} (A B : J -> cqs) :
+    cqs_fam A -> cqs_fam B ->
+    cqs_add (cqs_sum A) (cqs_sum B) = cqs_sum (fun j => cqs_add (A j) (B j)).
+  Proof.
+    intros HA HB; apply funext; intros m; unfold cqs_add, cqs_sum.
+    symmetry;
+      apply (tcp_sum_add _ _ _ _ (cqs_fam_ptwise A HA m)
+                                 (cqs_fam_ptwise B HB m)).
+  Qed.
+
+  Lemma restr_sum {J} (e : expr bool) (F : J -> cqs) :
+    restr e (cqs_sum F) = cqs_sum (fun j => restr e (F j)).
+  Proof.
+    apply funext; intros m; unfold restr, cqs_sum.
+    destruct (ev e m);
+      [ reflexivity | symmetry; apply tcp_sum_zero; intros; reflexivity ].
+  Qed.
+
+  Lemma restrn_sum {J} (e : expr bool) (F : J -> cqs) :
+    restrn e (cqs_sum F) = cqs_sum (fun j => restrn e (F j)).
+  Proof.
+    apply funext; intros m; unfold restrn, cqs_sum.
+    destruct (ev e m);
+      [ symmetry; apply tcp_sum_zero; intros; reflexivity | reflexivity ].
+  Qed.
+
+  Theorem denote_sum (c : prog) :
+    wt c -> loopfree c ->
+    forall (J : Type) (F : J -> cqs), cqs_fam F ->
+      denote c (cqs_sum F) = cqs_sum (fun j => denote c (F j)).
+  Proof.
+    induction c as [ | y e | y e | e c1 IH1 c2 IH2 | e c1 IH1
+                   | c1 IH1 c2 IH2 | Pq e | Pq e | y Pq e ];
+      intros Hwt Hlf J F HF.
+    - (* Skip *) reflexivity.
+    - (* Assign *)
+      apply funext; intros m'.
+      set (G := fun (j : J) (a : ctype y) =>
+                  if excluded_middle_informative (acond y e m' a)
+                  then F j (cupd m' y a) else tcp_zero).
+      assert (Hin : forall a,
+                 tcp_sum (fun j => G j a)
+                 = (if excluded_middle_informative (acond y e m' a)
+                    then cqs_sum F (cupd m' y a) else tcp_zero)).
+      { intros a; unfold G, cqs_sum.
+        destruct (excluded_middle_informative (acond y e m' a));
+          [ reflexivity | apply tcp_sum_zero; intros; reflexivity ]. }
+      assert (H1 : forall j, tcp_summable (G j))
+        by (intros j; apply (assign_inner_wf y e (F j) m' (cqs_fam_wf F HF j))).
+      assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
+      { unfold G;
+          apply (cqs_fam_ptwise (fun j => denote (Assign y e) (F j))
+                   (cqs_fam_denote F (Assign y e) Hwt Hlf HF) m'). }
+      assert (H3 : forall a, tcp_summable (fun j => G j a)).
+      { intros a; apply tcp_summable_trace.
+        apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
+        - apply tcp_summable_trace, (cqs_fam_ptwise F HF).
+        - intros j; unfold G;
+            destruct (excluded_middle_informative (acond y e m' a));
+            [ apply Rle_refl | rewrite tcp_trace_zero; apply tcp_trace_nonneg ]. }
+      assert (H4 : tcp_summable (fun a => tcp_sum (fun j => G j a))).
+      { assert (Heq : (fun a => tcp_sum (fun j => G j a))
+                      = (fun a : ctype y =>
+                           if excluded_middle_informative (acond y e m' a)
+                           then cqs_sum F (cupd m' y a) else tcp_zero))
+          by (apply funext; exact Hin).
+        rewrite Heq.
+        apply (assign_inner_wf y e (cqs_sum F) m' (cqs_fam_sum_wf F HF)). }
+      cbn [denote]; unfold sem_assign at 1.
+      transitivity (tcp_sum (fun a : ctype y => tcp_sum (fun j => G j a)));
+        [ f_equal; apply funext; intros a; symmetry; apply Hin |].
+      rewrite <- (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
+    - (* Sample *)
+      apply funext; intros m'.
+      set (G := fun (j : J) (a : ctype y) =>
+                  tcp_scale (ev e (cupd m' y a) (m' y)) (F j (cupd m' y a))).
+      assert (Hin : forall a,
+                 tcp_sum (fun j => G j a)
+                 = tcp_scale (ev e (cupd m' y a) (m' y))
+                             (cqs_sum F (cupd m' y a))).
+      { intros a; unfold G, cqs_sum; symmetry.
+        apply (tcp_scale_sum _ _ _ _ (cqs_fam_ptwise F HF (cupd m' y a))). }
+      assert (H1 : forall j, tcp_summable (G j))
+        by (intros j; apply (sample_inner_wf y e (F j) m' (cqs_fam_wf F HF j))).
+      assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
+      { unfold G;
+          apply (cqs_fam_ptwise (fun j => denote (Sample y e) (F j))
+                   (cqs_fam_denote F (Sample y e) Hwt Hlf HF) m'). }
+      assert (H3 : forall a, tcp_summable (fun j => G j a)).
+      { intros a; apply tcp_summable_trace.
+        apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
+        - apply tcp_summable_trace, (cqs_fam_ptwise F HF).
+        - intros j; unfold G; rewrite tcp_trace_scale.
+          rewrite <- (Rmult_1_l (tcp_trace (F j (cupd m' y a)))) at 2.
+          apply Rmult_le_compat_r;
+            [ apply tcp_trace_nonneg | apply dfun_le1_pt ]. }
+      assert (H4 : tcp_summable (fun a => tcp_sum (fun j => G j a))).
+      { assert (Heq : (fun a => tcp_sum (fun j => G j a))
+                      = (fun a : ctype y =>
+                           tcp_scale (ev e (cupd m' y a) (m' y))
+                                     (cqs_sum F (cupd m' y a))))
+          by (apply funext; exact Hin).
+        rewrite Heq.
+        apply (sample_inner_wf y e (cqs_sum F) m' (cqs_fam_sum_wf F HF)). }
+      cbn [denote]; unfold sem_sample at 1.
+      transitivity (tcp_sum (fun a : ctype y => tcp_sum (fun j => G j a)));
+        [ f_equal; apply funext; intros a; symmetry; apply Hin |].
+      rewrite <- (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
+    - (* Cond *)
+      cbn [wt loopfree] in Hwt, Hlf.
+      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
+      cbn [denote]; rewrite restr_sum, restrn_sum.
+      rewrite (IH1 Hwt1 Hlf1 J _ (cqs_fam_restr e F HF)).
+      rewrite (IH2 Hwt2 Hlf2 J _ (cqs_fam_restrn e F HF)).
+      apply cqs_sum_add;
+        [ apply (cqs_fam_denote _ c1 Hwt1 Hlf1), cqs_fam_restr; exact HF
+        | apply (cqs_fam_denote _ c2 Hwt2 Hlf2), cqs_fam_restrn; exact HF ].
+    - (* While: excluded *)
+      cbn [loopfree] in Hlf; destruct Hlf.
+    - (* Seq *)
+      cbn [wt loopfree] in Hwt, Hlf.
+      destruct Hwt as [Hwt1 Hwt2]; destruct Hlf as [Hlf1 Hlf2].
+      cbn [denote]; rewrite (IH1 Hwt1 Hlf1 J F HF).
+      apply (IH2 Hwt2 Hlf2), (cqs_fam_denote F c1 Hwt1 Hlf1 HF).
+    - (* QInit *)
+      apply funext; intros m.
+      assert (S0 : tcp_summable (fun j => F j m)) by apply (cqs_fam_ptwise F HF).
+      assert (S1 : tcp_summable
+                     (fun j => tcp_conj (oadj (Usplit Pq)) (F j m))).
+      { apply (tcp_summable_conj _ _
+                 (oisometry_oadj _ (Wsplit_unitary qvar qtype Pq)) S0). }
+      assert (S2 : tcp_summable
+                     (fun j => tcp_ptraceL
+                                 (tcp_conj (oadj (Usplit Pq)) (F j m))))
+        by (apply tcp_summable_ptraceL, S1).
+      cbn [denote]; unfold sem_qinit at 1, cqs_sum at 1.
+      (* through the discard ... *)
+      transitivity
+        (tcp_conj (Usplit Pq)
+           (tcp_tensor (tcp_proj (ev e m))
+              (tcp_sum (fun j : J =>
+                 tcp_ptraceL (tcp_conj (oadj (Usplit Pq)) (F j m)))))).
+      { f_equal; f_equal.
+        rewrite (tcp_conj_sum _ _ _ _ _ S0); apply (tcp_ptraceL_sum _ S1). }
+      (* ... then past the fresh state ... *)
+      transitivity
+        (tcp_conj (Usplit Pq)
+           (tcp_sum (fun j : J =>
+              tcp_tensor (tcp_proj (ev e m))
+                (tcp_ptraceL (tcp_conj (oadj (Usplit Pq)) (F j m)))))).
+      { f_equal; apply (tcp_tensor_sum_r _ _ _ _ _ S2). }
+      (* ... and out of the conjugation. *)
+      apply (tcp_conj_sum _ _ _ _ _ (tcp_summable_tensor_r _ _ S2)).
+    - (* QApply *)
+      apply funext; intros m.
+      cbn [denote]; unfold sem_qapply at 1, cqs_sum at 1.
+      apply (tcp_conj_sum _ _ _ _ _ (cqs_fam_ptwise F HF m)).
+    - (* Measure *)
+      cbn [wt] in Hwt.
+      apply funext; intros m'.
+      set (G := fun (j : J) (a : ctype y) =>
+                  tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                           (F j (cupd m' y a))).
+      assert (Hin : forall a,
+                 tcp_sum (fun j => G j a)
+                 = tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                            (cqs_sum F (cupd m' y a))).
+      { intros a; unfold G, cqs_sum; symmetry.
+        apply (tcp_conj_sum _ _ _ _ _ (cqs_fam_ptwise F HF (cupd m' y a))). }
+      assert (H1 : forall j, tcp_summable (G j))
+        by (intros j;
+            apply (measure_inner_wf y Pq e Hwt (F j) m' (cqs_fam_wf F HF j))).
+      assert (H2 : tcp_summable (fun j => tcp_sum (G j))).
+      { unfold G;
+          apply (cqs_fam_ptwise (fun j => denote (Measure y Pq e) (F j))
+                   (cqs_fam_denote F (Measure y Pq e) Hwt Hlf HF) m'). }
+      assert (H3 : forall a, tcp_summable (fun j => G j a)).
+      { intros a; apply tcp_summable_trace.
+        apply (summable_mono _ (fun j => tcp_trace (F j (cupd m' y a)))).
+        - apply tcp_summable_trace, (cqs_fam_ptwise F HF).
+        - intros j; unfold G; apply (measure_term_le y Pq e Hwt). }
+      assert (H4 : tcp_summable (fun a => tcp_sum (fun j => G j a))).
+      { assert (Heq : (fun a => tcp_sum (fun j => G j a))
+                      = (fun a : ctype y =>
+                           tcp_conj (olift Pq (ev e (cupd m' y a) (m' y)))
+                                    (cqs_sum F (cupd m' y a))))
+          by (apply funext; exact Hin).
+        rewrite Heq.
+        apply (measure_inner_wf y Pq e Hwt (cqs_sum F) m'
+                 (cqs_fam_sum_wf F HF)). }
+      cbn [denote]; unfold sem_measure at 1.
+      transitivity (tcp_sum (fun a : ctype y => tcp_sum (fun j => G j a)));
+        [ f_equal; apply funext; intros a; symmetry; apply Hin |].
+      rewrite <- (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
+  Qed.
+
   Corollary denote_trace_le (c : prog) :
     wt c -> loopfree c ->
     forall r, cqs_wf r -> (cqs_trace (denote c r) <= cqs_trace r)%R.

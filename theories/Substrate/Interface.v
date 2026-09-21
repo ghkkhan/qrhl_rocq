@@ -618,6 +618,13 @@ Module Type HILBERT_SUBSTRATE.
       tcp_tensor r (tcp_add s t)
       = tcp_add (tcp_tensor r s) (tcp_tensor r t).
 
+  (** Normality of the tensor in the factor that varies. Needed for the
+      [Q <-q e] clause of [denote_sum], where a fresh state is tensored onto a
+      sum of reduced states. *)
+  Axiom tcp_tensor_sum_r : forall X Y J (r : tcp X) (F : J -> tcp Y),
+      tcp_summable F ->
+      tcp_tensor r (tcp_sum F) = tcp_sum (fun j => tcp_tensor r (F j)).
+
   (** *** Sums *)
 
   Axiom tcp_summable_trace : forall X J (F : J -> tcp X),

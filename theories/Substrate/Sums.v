@@ -257,6 +257,28 @@ Proof.
     apply tsum_ub; [ exact Hs | apply NoDup_map_inj; assumption ].
 Qed.
 
+(** Swapping the two components of a pair index does not change the sum: the
+    swap is its own inverse, so [tsum_inj_le] applies in both directions. *)
+Lemma tsum_swap_pair {K A : Type} (f : K * A -> R) :
+  summable f -> tsum (fun q : A * K => f (snd q, fst q)) = tsum f.
+Proof.
+  intros Hs.
+  assert (Hinj1 : forall a b : A * K, (snd a, fst a) = (snd b, fst b) -> a = b)
+    by (intros [a1 a2] [b1 b2] H; cbn in H; congruence).
+  assert (Hinj2 : forall a b : K * A, (snd a, fst a) = (snd b, fst b) -> a = b)
+    by (intros [a1 a2] [b1 b2] H; cbn in H; congruence).
+  assert (Hs' : summable (fun q : A * K => f (snd q, fst q)))
+    by (apply (summable_inj (fun q : A * K => (snd q, fst q)) f); assumption).
+  apply Rle_antisym.
+  - apply (tsum_inj_le (fun q : A * K => (snd q, fst q)) f); assumption.
+  - assert (Heta : f = (fun p : K * A => f (snd (snd p, fst p),
+                                            fst (snd p, fst p))))
+      by (apply functional_extensionality; intros [a b]; reflexivity).
+    rewrite Heta at 1.
+    apply (tsum_inj_le (fun p : K * A => (snd p, fst p))
+             (fun q : A * K => f (snd q, fst q))); assumption.
+Qed.
+
 (* ------------------------------------------------------------------ *)
 (** ** Rearrangement
 

@@ -762,6 +762,32 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     rewrite tcp_ptrace_tensor, tcp_trace_scale; ring.
   Qed.
 
+  Lemma tcp_ptraceL_sum {X Y J} (F : J -> tcp (X * Y)) :
+    tcp_summable F ->
+    tcp_ptraceL (tcp_sum F) = tcp_sum (fun j => tcp_ptraceL (F j)).
+  Proof. apply tcp_ptrace2_sum. Qed.
+
+  Lemma tcp_summable_ptraceL {X Y J} (F : J -> tcp (X * Y)) :
+    tcp_summable F -> tcp_summable (fun j => tcp_ptraceL (F j)).
+  Proof.
+    intros H; apply tcp_summable_trace.
+    apply (summable_mono _ (fun j => tcp_trace (F j)));
+      [ apply tcp_summable_trace; exact H
+      | intros j; rewrite tcp_ptraceL_trace; apply Rle_refl ].
+  Qed.
+
+  Lemma tcp_summable_tensor_r {X Y J} (r : tcp X) (F : J -> tcp Y) :
+    tcp_summable F -> tcp_summable (fun j => tcp_tensor r (F j)).
+  Proof.
+    intros H; apply tcp_summable_trace.
+    apply (summable_mono _ (fun j => (tcp_trace r * tcp_trace (F j))%R)).
+    - apply summable_scale;
+        [ apply tcp_trace_nonneg
+        | intros j; apply tcp_trace_nonneg
+        | apply tcp_summable_trace; exact H ].
+    - intros j; rewrite tcp_trace_tensor; apply Rle_refl.
+  Qed.
+
   Lemma tcp_tensor_zero_r {X Y} (r : tcp X) :
     tcp_tensor r (@tcp_zero Y) = tcp_zero.
   Proof.

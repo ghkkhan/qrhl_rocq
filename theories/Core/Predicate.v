@@ -110,6 +110,21 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       [ intros p; apply tcp_trace_nonneg | apply rcqs_pairs_summable; exact Hr ].
   Qed.
 
+  Lemma rcqs_projR_wf (r : rcqs) : rcqs_wf r -> cqs_wf (rcqs_projR r).
+  Proof.
+    intros Hr; apply tcp_summable_trace.
+    assert (Heq : (fun m2 => tcp_trace (rcqs_projR r m2))
+                  = (fun m2 => tsum (fun m1 => tcp_trace (r (m1, m2)))))
+      by (apply funext; intros m2; apply rcqs_projR_trace; exact Hr).
+    rewrite Heq.
+    apply (tsum_iter_le_pairs (fun m2 m1 => tcp_trace (r (m1, m2))));
+      [ intros p; apply tcp_trace_nonneg |].
+    apply (summable_inj (fun q : cmem * cmem => ((snd q, fst q) : rcmem))
+                        (fun rm : rcmem => tcp_trace (r rm)));
+      [ intros [a b] [x y] H; cbn in H; congruence
+      | apply tcp_summable_trace; exact Hr ].
+  Qed.
+
   (* ================================================================= *)
   (** ** Predicates (Definition 13) *)
 

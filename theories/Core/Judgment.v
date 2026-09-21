@@ -433,6 +433,286 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Qed.
 
   (* ================================================================= *)
+  (* ================================================================= *)
+  (** ** Families of relational states
+
+      Rule Case splits a state by the value of a classical expression and
+      reassembles the witnesses it gets back; the converse of Lemma 36 does
+      the same with the components of a spectral decomposition. Both need the
+      same facts about a summed family -- that it is well-formed, separable,
+      that its support is the join of the supports, and that the two
+      projections are normal -- so they are proved once here. As with
+      [cqs_fam] in [Semantics.v] the single hypothesis is joint summability of
+      the traces over (index, memory); everything else follows by Tonelli. *)
+
+  Lemma tcp_sep_sum {X Y J} (G : J -> tcp (X * Y)) :
+    tcp_summable G -> (forall j, tcp_sep (G j)) -> tcp_sep (tcp_sum G).
+  Proof.
+    intros Hs HGsep.
+    assert (Hdec : forall j : J,
+              { K : Type & { fg : (K -> tcp X) * (K -> tcp Y) |
+                  tcp_summable (fun k => tcp_tensor (fst fg k) (snd fg k))
+                  /\ G j
+                     = tcp_sum (fun k => tcp_tensor (fst fg k) (snd fg k)) } }).
+    { intros j.
+      destruct (constructive_indefinite_description _ (HGsep j)) as [K HK].
+      destruct (constructive_indefinite_description _ HK) as [f Hf].
+      destruct (constructive_indefinite_description _ Hf) as [g Hg].
+      exists K, (f, g); exact Hg. }
+    exists (sigT (fun j : J => projT1 (Hdec j))),
+           (fun p => fst (proj1_sig (projT2 (Hdec (projT1 p)))) (projT2 p)),
+           (fun p => snd (proj1_sig (projT2 (Hdec (projT1 p)))) (projT2 p)).
+    set (F := fun (j : J) (k : projT1 (Hdec j)) =>
+                tcp_tensor (fst (proj1_sig (projT2 (Hdec j))) k)
+                           (snd (proj1_sig (projT2 (Hdec j))) k)).
+    assert (HFa : forall j, tcp_summable (F j))
+      by (intros j; apply (proj1 (proj2_sig (projT2 (Hdec j))))).
+    assert (HFs : forall j, G j = tcp_sum (F j))
+      by (intros j; apply (proj2 (proj2_sig (projT2 (Hdec j))))).
+    assert (HGs : tcp_summable (fun j => tcp_sum (F j))).
+    { assert (HGeq : (fun j => tcp_sum (F j)) = G)
+        by (apply funext; intros j; symmetry; apply HFs).
+      rewrite HGeq; exact Hs. }
+    destruct (tcp_sum_sigma _ _ _ F HFa HGs) as [Hsig Heqsig].
+    split.
+    - exact Hsig.
+    - transitivity (tcp_sum (fun j => tcp_sum (F j)));
+        [ f_equal; apply funext; intros j; apply HFs | exact Heqsig ].
+  Qed.
+
+  Lemma rsep_sum {J} (G : J -> tcp rqmem) :
+    tcp_summable G -> (forall j, rsep (G j)) -> rsep (tcp_sum G).
+  Proof.
+    intros Hs HG; unfold rsep.
+    rewrite (tcp_conj_sum _ _ _ _ _ Hs).
+    apply tcp_sep_sum;
+      [ apply (tcp_summable_conj _ _ (proj1 Urqpair_unitary) Hs) | exact HG ].
+  Qed.
+
+  Definition rcqs_sum {J : Type} (F : J -> rcqs) : rcqs :=
+    fun rm => tcp_sum (fun j => F j rm).
+
+  Definition rcqs_fam {J : Type} (F : J -> rcqs) : Prop :=
+    summable (fun p : J * rcmem => tcp_trace (F (fst p) (snd p))).
+
+  Lemma rcqs_fam_wf {J} (F : J -> rcqs) :
+    rcqs_fam F -> forall j, rcqs_wf (F j).
+  Proof.
+    intros H j; apply tcp_summable_trace.
+    apply (summable_inj (fun rm : rcmem => (j, rm))
+                        (fun p : J * rcmem => tcp_trace (F (fst p) (snd p))));
+      [ intros a b Hab; congruence | exact H ].
+  Qed.
+
+  Lemma rcqs_fam_ptwise {J} (F : J -> rcqs) :
+    rcqs_fam F -> forall rm, tcp_summable (fun j => F j rm).
+  Proof.
+    intros H rm; apply tcp_summable_trace.
+    apply (summable_inj (fun j : J => (j, rm))
+                        (fun p : J * rcmem => tcp_trace (F (fst p) (snd p))));
+      [ intros a b Hab; congruence | exact H ].
+  Qed.
+
+  Lemma rcqs_fam_trace {J} (F : J -> rcqs) :
+    rcqs_fam F -> summable (fun j => rcqs_trace (F j)).
+  Proof.
+    intros H.
+    destruct (tsum_iter_le_pairs (fun (j : J) (rm : rcmem) => tcp_trace (F j rm))
+                (fun p => tcp_trace_nonneg _ _) H) as [Hit _].
+    exact Hit.
+  Qed.
+
+  Lemma rcqs_sum_wf {J} (F : J -> rcqs) : rcqs_fam F -> rcqs_wf (rcqs_sum F).
+  Proof.
+    intros H; apply tcp_summable_trace.
+    assert (Heq : (fun rm => tcp_trace (rcqs_sum F rm))
+                  = (fun rm : rcmem => tsum (fun j => tcp_trace (F j rm))))
+      by (apply funext; intros rm; unfold rcqs_sum;
+          apply (tcp_trace_sum _ _ _ (rcqs_fam_ptwise F H rm))).
+    rewrite Heq.
+    assert (Hsw : summable
+                    (fun q : rcmem * J => tcp_trace (F (snd q) (fst q)))).
+    { apply (summable_inj (fun q : rcmem * J => (snd q, fst q))
+                          (fun p : J * rcmem => tcp_trace (F (fst p) (snd p)))).
+      - intros [m1 j1] [m2 j2] Hq; cbn in Hq; congruence.
+      - exact H. }
+    destruct (tsum_iter_le_pairs
+                (fun (rm : rcmem) (j : J) => tcp_trace (F j rm))
+                (fun q => tcp_trace_nonneg _ _) Hsw) as [Hit _].
+    exact Hit.
+  Qed.
+
+  Lemma rcqs_sum_sep {J} (F : J -> rcqs) :
+    rcqs_fam F -> (forall j, rcqs_sep (F j)) -> rcqs_sep (rcqs_sum F).
+  Proof.
+    intros HF Hsep rm; unfold rcqs_sum.
+    apply rsep_sum; [ apply (rcqs_fam_ptwise F HF) | intros j; apply Hsep ].
+  Qed.
+
+  Lemma rcqs_sum_psat {J} (F : J -> rcqs) (B : pred) :
+    rcqs_fam F -> (forall j, psat (F j) B) -> psat (rcqs_sum F) B.
+  Proof.
+    intros HF Hsat rm; unfold rcqs_sum.
+    rewrite (tcp_supp_sum _ _ _ (rcqs_fam_ptwise F HF rm)).
+    apply hSup_lub; intros j; apply Hsat.
+  Qed.
+
+  (** The total trace of a relational state is the total trace of either of
+      its projections: the partial traces do not lose anything. *)
+  Lemma rcqs_trace_projL (r : rcqs) :
+    rcqs_wf r -> cqs_trace (rcqs_projL r) = rcqs_trace r.
+  Proof.
+    intros Hr; unfold cqs_trace, rcqs_trace.
+    assert (Hsl : forall m1, summable (fun m2 => tcp_trace (r (m1, m2)))).
+    { intros m1.
+      apply (summable_inj (fun m2 : cmem => (m1, m2))
+                          (fun rm : rcmem => tcp_trace (r rm)));
+        [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hr ]. }
+    assert (Heq : (fun m1 => tcp_trace (rcqs_projL r m1))
+                  = (fun m1 : cmem => tsum (fun m2 => tcp_trace (r (m1, m2)))))
+      by (apply funext; intros m1; apply rcqs_projL_trace; exact Hr).
+    assert (Hit : summable
+                    (fun m1 : cmem => tsum (fun m2 => tcp_trace (r (m1, m2))))).
+    { rewrite <- Heq; apply tcp_summable_trace, rcqs_projL_wf; exact Hr. }
+    rewrite Heq.
+    destruct (tsum_tonelli (fun (m1 m2 : cmem) => tcp_trace (r (m1, m2)))
+                (fun m1 m2 => tcp_trace_nonneg _ _) Hsl Hit) as [_ Hval].
+    rewrite <- Hval.
+    f_equal; apply funext; intros [u v]; reflexivity.
+  Qed.
+
+  Lemma rcqs_trace_projR (r : rcqs) :
+    rcqs_wf r -> cqs_trace (rcqs_projR r) = rcqs_trace r.
+  Proof.
+    intros Hr; unfold cqs_trace, rcqs_trace.
+    assert (Hsl : forall m2, summable (fun m1 => tcp_trace (r (m1, m2)))).
+    { intros m2.
+      apply (summable_inj (fun m1 : cmem => (m1, m2))
+                          (fun rm : rcmem => tcp_trace (r rm)));
+        [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hr ]. }
+    assert (Heq : (fun m2 => tcp_trace (rcqs_projR r m2))
+                  = (fun m2 : cmem => tsum (fun m1 => tcp_trace (r (m1, m2)))))
+      by (apply funext; intros m2; apply rcqs_projR_trace; exact Hr).
+    assert (Hit : summable
+                    (fun m2 : cmem => tsum (fun m1 => tcp_trace (r (m1, m2))))).
+    { rewrite <- Heq; apply tcp_summable_trace, rcqs_projR_wf; exact Hr. }
+    rewrite Heq.
+    destruct (tsum_tonelli (fun (m2 m1 : cmem) => tcp_trace (r (m1, m2)))
+                (fun m2 m1 => tcp_trace_nonneg _ _) Hsl Hit) as [_ Hval].
+    rewrite <- Hval.
+    apply (tsum_swap_pair (fun rm : rcmem => tcp_trace (r rm))).
+    apply tcp_summable_trace; exact Hr.
+  Qed.
+
+  (** Normality of the two projections. The double sum -- over the family and
+      over the other side's memory -- has to be exchanged, which is
+      [tcp_sum_swap]. *)
+
+  Lemma rcqs_projL_sum {J} (F : J -> rcqs) :
+    rcqs_fam F ->
+    rcqs_projL (rcqs_sum F) = cqs_sum (fun j => rcqs_projL (F j)).
+  Proof.
+    intros HF; apply funext; intros m1.
+    set (G := fun (m2 : cmem) (j : J) => rtcpL (F j (m1, m2))).
+    assert (H1 : forall m2, tcp_summable (G m2))
+      by (intros m2; apply rtcpL_summable, (rcqs_fam_ptwise F HF)).
+    assert (H3 : forall j, tcp_summable (fun m2 => G m2 j))
+      by (intros j; apply (rcqs_slice_wf (F j) m1 (rcqs_fam_wf F HF j))).
+    assert (Hslice : forall m2,
+               tcp_sum (G m2) = rtcpL (rcqs_sum F (m1, m2))).
+    { intros m2; unfold G, rcqs_sum; symmetry.
+      apply (rtcpL_sum _ (rcqs_fam_ptwise F HF (m1, m2))). }
+    assert (H2 : tcp_summable (fun m2 => tcp_sum (G m2))).
+    { assert (Heq : (fun m2 => tcp_sum (G m2))
+                    = (fun m2 : cmem => rtcpL (rcqs_sum F (m1, m2))))
+        by (apply funext; exact Hslice).
+      rewrite Heq; apply (rcqs_slice_wf (rcqs_sum F) m1 (rcqs_sum_wf F HF)). }
+    assert (H4 : tcp_summable (fun j => tcp_sum (fun m2 => G m2 j))).
+    { apply tcp_summable_trace.
+      apply (summable_mono _ (fun j => rcqs_trace (F j)));
+        [ apply rcqs_fam_trace; exact HF |].
+      intros j; rewrite (tcp_trace_sum _ _ _ (H3 j)).
+      assert (Heq : (fun m2 : cmem => tcp_trace (G m2 j))
+                    = (fun m2 : cmem => tcp_trace (F j (m1, m2))))
+        by (apply funext; intros m2; unfold G; apply rtcpL_trace).
+      rewrite Heq; unfold rcqs_trace.
+      apply (tsum_inj_le (fun m2 : cmem => ((m1, m2) : rcmem))
+               (fun rm : rcmem => tcp_trace (F j rm)));
+        [ intros a b Hab; congruence
+        | apply tcp_summable_trace, (rcqs_fam_wf F HF j) ]. }
+    unfold rcqs_projL at 1, cqs_sum.
+    transitivity (tcp_sum (fun m2 : cmem => tcp_sum (G m2)));
+      [ f_equal; apply funext; intros m2; symmetry; apply Hslice |].
+    rewrite (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
+  Qed.
+
+  Lemma rcqs_projR_sum {J} (F : J -> rcqs) :
+    rcqs_fam F ->
+    rcqs_projR (rcqs_sum F) = cqs_sum (fun j => rcqs_projR (F j)).
+  Proof.
+    intros HF; apply funext; intros m2.
+    set (G := fun (m1 : cmem) (j : J) => rtcpR (F j (m1, m2))).
+    assert (H1 : forall m1, tcp_summable (G m1))
+      by (intros m1; apply rtcpR_summable, (rcqs_fam_ptwise F HF)).
+    assert (H3 : forall j, tcp_summable (fun m1 => G m1 j))
+      by (intros j; apply (rcqs_slice_wf_R (F j) m2 (rcqs_fam_wf F HF j))).
+    assert (Hslice : forall m1,
+               tcp_sum (G m1) = rtcpR (rcqs_sum F (m1, m2))).
+    { intros m1; unfold G, rcqs_sum; symmetry.
+      apply (rtcpR_sum _ (rcqs_fam_ptwise F HF (m1, m2))). }
+    assert (H2 : tcp_summable (fun m1 => tcp_sum (G m1))).
+    { assert (Heq : (fun m1 => tcp_sum (G m1))
+                    = (fun m1 : cmem => rtcpR (rcqs_sum F (m1, m2))))
+        by (apply funext; exact Hslice).
+      rewrite Heq; apply (rcqs_slice_wf_R (rcqs_sum F) m2 (rcqs_sum_wf F HF)). }
+    assert (H4 : tcp_summable (fun j => tcp_sum (fun m1 => G m1 j))).
+    { apply tcp_summable_trace.
+      apply (summable_mono _ (fun j => rcqs_trace (F j)));
+        [ apply rcqs_fam_trace; exact HF |].
+      intros j; rewrite (tcp_trace_sum _ _ _ (H3 j)).
+      assert (Heq : (fun m1 : cmem => tcp_trace (G m1 j))
+                    = (fun m1 : cmem => tcp_trace (F j (m1, m2))))
+        by (apply funext; intros m1; unfold G; apply rtcpR_trace).
+      rewrite Heq; unfold rcqs_trace.
+      apply (tsum_inj_le (fun m1 : cmem => ((m1, m2) : rcmem))
+               (fun rm : rcmem => tcp_trace (F j rm)));
+        [ intros a b Hab; congruence
+        | apply tcp_summable_trace, (rcqs_fam_wf F HF j) ]. }
+    unfold rcqs_projR at 1, cqs_sum.
+    transitivity (tcp_sum (fun m1 : cmem => tcp_sum (G m1)));
+      [ f_equal; apply funext; intros m1; symmetry; apply Hslice |].
+    rewrite (tcp_sum_swap G H1 H2 H3 H4); reflexivity.
+  Qed.
+
+  (** A family of relational states projects to a family of cq-states, which
+      is what lets [denote_sum] be applied to the projections. *)
+
+  Lemma rcqs_fam_projL {J} (F : J -> rcqs) :
+    rcqs_fam F -> cqs_fam (fun j => rcqs_projL (F j)).
+  Proof.
+    intros HF; unfold cqs_fam.
+    refine (proj1 (tsum_pairs_le_iter
+                     (fun (j : J) (m1 : cmem) =>
+                        tcp_trace (rcqs_projL (F j) m1)) _ _)).
+    - intros j; apply tcp_summable_trace, rcqs_projL_wf, (rcqs_fam_wf F HF j).
+    - apply (summable_mono _ (fun j => rcqs_trace (F j)));
+        [ apply rcqs_fam_trace; exact HF |].
+      intros j; apply Req_le, rcqs_trace_projL, (rcqs_fam_wf F HF j).
+  Qed.
+
+  Lemma rcqs_fam_projR {J} (F : J -> rcqs) :
+    rcqs_fam F -> cqs_fam (fun j => rcqs_projR (F j)).
+  Proof.
+    intros HF; unfold cqs_fam.
+    refine (proj1 (tsum_pairs_le_iter
+                     (fun (j : J) (m2 : cmem) =>
+                        tcp_trace (rcqs_projR (F j) m2)) _ _)).
+    - intros j; apply tcp_summable_trace, rcqs_projR_wf, (rcqs_fam_wf F HF j).
+    - apply (summable_mono _ (fun j => rcqs_trace (F j)));
+        [ apply rcqs_fam_trace; exact HF |].
+      intros j; apply Req_le, rcqs_trace_projR, (rcqs_fam_wf F HF j).
+  Qed.
+
   (** ** Point masses and pure product states
 
       Lemma 36 reduces the judgment to states of this shape, and the rule
