@@ -466,33 +466,59 @@ No admits, no axioms beyond the two named above (net +2: `tcp_ptrace_pswap`,
 `tcp_conj_pswap`; `op_ext_ket` replacing `op_ext` is net 0). 44 parameters,
 127 axioms.
 
-### 7d. `QInit1`, and register coherence — STILL OUTSTANDING
+### 7d. `QInit1`, and register coherence — the reassociation is DONE; the rule is not
 
-`op_ext_ket` did **not** make this cheap, only possible in principle; it is
-still the largest remaining architectural piece in Phase 1d, and is on the
-critical path to Phase 1's exit criterion (the EPR examples need it).
+**Update: the assessment below (register coherence needs one monolithic
+dependent `Ubij`, "likely the most painful Rocq in the development") was
+wrong, on both difficulty and shape.** It took three small, independent
+`Registers.v` lemmas, none of them the feared `bmerge`/`bpickl`/`bpickr`
+construction, and the whole thing (including both round-trip proofs and the
+final `op_ext_ket` lift) is under 100 lines:
 
-It is blocked on relating two decompositions of the relational memory:
+- **`rqneg_qidx`**: `rqneg (qidx SL Q) = wunion (qidx SL (qneg Q)) (qidx SR
+  (fun _ => true))`, a `wset` equality over `rqvar`, proved by `funext` +
+  `destruct` + `destruct (Q q)`. Used only as a fact about *plain functions*
+  inside the next lemma's proof — never as a type-level transport.
+- **`Urelab s Q : op (rqsub (qidx s Q)) (qsub Q)`**: one side's copy of a
+  register is just that register, relabeled. The trick that makes this
+  cheap: *destruct `s` at the top of the definition*, not inside the round
+  trip proofs. Once `s` is a concrete constructor, `qidx s Q` reduces to `Q`
+  (or to the constant `false`) *by computation alone* (`side_eqb SL SL`
+  reduces to `true` by iota, no `qidx_same`-style transport needed), so both
+  round trips close by `destruct + reflexivity`. The version that tried to
+  stay generic in `s` and transport along `qidx_same` produced a stuck
+  `eq_rect` immediately (an opaque `Qed` proof used as a computational
+  transport) — that's the one dead end worth remembering.
+- **`Uassoc Q`**, the actual reassociation, between `rqsub (qidx SL Q) *
+  rqsub (rqneg (qidx SL Q))` and `(qsub Q * qsub (qneg Q)) * qmem`: built the
+  *same* way as `Urelab` — both directions are plain functions that type
+  themselves correctly by computation once the side tag is concrete, so no
+  `Wsplit2` (disjoint-union combinator) and no transport of `rqneg_qidx`
+  along the operator's domain type were needed, even though that was the
+  obvious way to try to assemble it from existing pieces. `rqneg_qidx` is
+  used only inside `wjoin_qidx_SL`, again purely as a fact about how a
+  *memory function* (not a register type) decomposes.
+- **`rUsplit_qidx_SL`**: `rUsplit (qidx SL Q) = ocomp (oadj Urqpair) (ocomp
+  (tensoro (Usplit Q) oid) (Uassoc Q))`, the full operator identity, proved
+  first on kets (`rUsplit_qidx_SL_ket`, pure index algebra in the
+  `rq_pair_swap`/`Urqpair_Urqswap` pattern) and then lifted by `op_ext_ket`.
 
-- the side split `rqmem ≅ qmem ⊗ qmem` (via `Urqpair`), followed by the
-  register split `qmem ≅ ℓ²[Q] ⊗ ℓ²[Qᶜ]` (via `Wsplit`), against
-- the relational register split `rqmem ≅ ℓ²[idx₁ Q] ⊗ ℓ²[(idx₁ Q)ᶜ]` (via
-  `Wsplit` on `rqvar`).
+So `op_ext_ket` *did* make this cheap, once the reassociation was built the
+right way; the earlier note's pessimism came from assuming the reassociation
+had to be built as one dependent `Ubij` with the padding threaded through
+by hand, when in fact each piece independently reduces to a concrete side
+before any dependent matching is needed.
 
-Defining one-sided lifts through `Urqpair` sidestepped this for every rule
-proved so far, but `QInit1` cannot sidestep it: the operation *discards* a
-register, so both its left projection and its separability need the two
-pictures identified. This is a genuinely different, harder coherence problem
-than the one `Sym` needed (`Urqswap` alone, no register split involved): the
-reassociation unitary has to be built as a `Ubij` between
-`rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and `(qsub P × qsub Pᶜ) × qmem`, and its
-two round-trip proofs are dependent function equalities over
-`fun w => if P w then wty w else unit` — matching the `bmerge`/`bpickl`/`bpickr`
-pattern §4 already flags as the place dependent typing bites hardest, now one
-level of nesting deeper. `op_ext_ket` makes the *identity itself* an
-index-level computation once the reassociation `Ubij` exists; building that
-`Ubij` is the remaining work, and is likely the most painful Rocq in the
-development.
+**What is still open**: `rule_QInit1` itself. The witness — discard `Q`,
+tensor in the fresh state, via `Urqpair` + `Usplit Q`, exactly `sem_qinit`
+lifted to act on one factor of `qmem * qmem` — never needs the
+reassociation at all (it stays entirely in the `Urqpair` picture, like every
+other one-sided rule). The reassociation is needed only to connect
+`hdivReg`/`pdiv`'s precondition (stated through `rUsplit (qidx SL Q)`,
+because that is the paper's surface form) back to that picture when
+extracting what `psat r (pdiv ...)` gives about `r`'s decomposition. That
+connection, the witness's projections and separability, and the rule proof
+itself are not attempted yet.
 
 ### 7e. `JointMeasureSimple` (Lem 64)
 
