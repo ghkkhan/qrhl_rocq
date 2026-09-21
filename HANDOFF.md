@@ -328,7 +328,10 @@ discharges that risk.
 
 Everything in Phase 1d is done except `QInit1` and `JointMeasureSimple`. The
 ordering below reflects what is actually blocked by what, not the phase
-numbering.
+numbering -- sections are numbered `7a`..`7g` in the order they were tackled
+historically, but as of this update **do §7f before returning to §7d**:
+`QInit1` (§7d) is now known to need the Schmidt decomposition that §7f's
+Lemma 29/30 also needs, so §7f is the actual next item, not §7e.
 
 ### 7a. Lemma 36's converse — DONE
 
@@ -528,7 +531,8 @@ had to be built as one dependent `Ubij` with the padding threaded through
 by hand, when in fact each piece independently reduces to a concrete side
 before any dependent matching is needed.
 
-**What is still open**: `rule_QInit1` itself. The witness's core,
+**What is still open**: `rule_QInit1` itself, and it turns out to be blocked
+on more than register coherence. The witness's trace/linearity core,
 `qinit_tcp` (`Rules/Quantum.v`), is landed and compiling: `sem_qinit`'s
 per-block formula lifted from `cqs` to a bare `tcp qmem`,
 
@@ -538,48 +542,53 @@ Definition qinit_tcp (rm : rcmem) (f : tcp qmem) : tcp qmem :=
     (tcp_tensor (tcp_proj (psi rm)) (tcp_ptrace2 (tcp_conj (oadj (Usplit P)) f))).
 ```
 
-with `qinit_tcp_trace` (exact trace preservation given `psi` normalized,
-`Hpsi`), `qinit_tcp_scale`, and `qinit_tcp_sum` (both needed to push it
-through `rsep`'s separability witness). This stays entirely within `qmem` --
-a plain two-level `qsub P * qsub Pᶜ` split, never a nested product -- which
-is *why* no associator is needed here at all, unlike the reverted attempt
-above.
+with `qinit_tcp_trace` (exact trace preservation given `psi` normalized),
+`qinit_tcp_scale`, and `qinit_tcp_sum`. This stays entirely within `qmem` --
+a plain two-level `qsub P * qsub Pᶜ` split, never a nested product -- so no
+associator is needed here, unlike the reverted attempt earlier in this
+section. `pdiv` was also corrected to use `rhlift_r P` (built from
+`rUsplit P` directly) instead of `rhlift (rqneg P)` (`Wsplit (rqneg P)`,
+which drags in `rqneg`'s double negation for no reason), and `himg_unitary`
+(`Substrate/Theory.v`: for unitary `A`, `himg A S = hpreim (oadj A) S`) is
+landed for the membership reasoning below. `pdiv` had no consumers, so this
+was a free correction.
 
-**The witness itself, and the two projections, are not yet built.** The plan:
-`qrhl` hands `rcqs_sep r`, so at each `rm` extract `J, f, g` (via
-`constructive_indefinite_description`, the `rule_Case`/`rule_QApply1` pattern)
-with `tcp_conj Urqpair (r rm) = tcp_sum (fun j => tcp_tensor (f j) (g j))`, and
-define the witness as
+**The real blocker, found by working the postcondition all the way through:
+`rule_QInit1` needs the Schmidt decomposition (§7f), not just `tcp_decompose`.**
+The natural proof route is `qrhl_pure_to_qrhl` (already proved): show
+`qrhl_pure (pdiv (qidx SL Q) A e') (QInit Q e) Skip A` -- i.e. handle only
+normalized pure product inputs `v ⊗ w`, matching the paper's own proof of
+Lemma 66 exactly (fix `m1, m2`, normalized `ψ1, ψ2`) -- and lift with
+`qrhl_pure_to_qrhl`. This looked, in an earlier draft of this section, like
+it would go through with `tcp_decompose` standing in for the paper's
+Schmidt decomposition. That is only half right:
 
-```coq
-tcp_conj (oadj Urqpair) (tcp_sum (fun j => tcp_tensor (qinit_tcp rm (f j)) (g j)))
-```
+- **The witness side** (well-formedness, separability, the two projections)
+  genuinely only needs `tcp_decompose`: apply it to `tcp_ptrace2 (tcp_proj
+  (oapp (oadj (Usplit Q)) v))` (the reduced state after discarding `Q` from
+  `v`) to get a sum of pure pieces `chi_i`, and `qinit_tcp`'s own value on
+  `tcp_proj v` unwinds (via `tcp_conj_proj`, `tcp_tensor_proj`,
+  `tcp_tensor_sum_r`/`tcp_conj_sum`) into `tcp_sum (fun i => tcp_proj
+  (oapp (Usplit Q) (tensorv psi chi_i)))` -- a genuine pure-state
+  decomposition of the witness, no Schmidt needed.
+- **The postcondition side needs more.** `psat` on that witness reduces to
+  `hmem (rprod (oapp (Usplit Q) (tensorv psi chi_i)) w) (ev A (m1, m2))` for
+  each `i`, and the only thing in hand is `hmem (rprod v w) (ev (pdiv ...)
+  (m1, m2))` -- a membership fact about `v` and `w` *as a whole*, not about
+  the individual `chi_i`. Going from "a whole sum lies in a subspace" to
+  "each term does" needs the terms to be *orthogonal*, which the paper gets
+  from Schmidt (`ψ1 = Σᵢ λᵢ ψᵢ^S ⊗ ψᵢ^Q` with `ψᵢ^Q` orthonormal) and which
+  `tcp_decompose` alone does not supply: it decomposes the *reduced density
+  matrix*, not `v` itself, so it gives no orthogonality relation back to `v`
+  or to the precondition. This is exactly Lemma 7 / Lemma 29's dependency,
+  and it is not yet in this codebase (§7f).
 
-with `psi rm := oapp (oadj (Urelab SL Q)) (ev e (csel SL rm))` (`Urelab`, from
-§7d's coherence work, placing the fresh state), and normalization
-(`inner (psi rm) (psi rm) = C1`) following from `wt (QInit Q e)` (`Syntax.v`:
-exactly `forall m, inner (ev e m) (ev e m) = C1`) plus `Urelab`'s isometry.
-From here:
-
-- **Separability** is immediate: the witness is already a sum of tensors.
-- **`rtcpR`** (unchanged, right program is `skip`): `tcp_ptrace2` of the sum,
-  per summand `tcp_ptrace2 (tcp_tensor (qinit_tcp rm (f j)) (g j)) = tcp_scale
-  (tcp_trace (qinit_tcp rm (f j))) (g j)` (`tcp_ptrace2_tensor`), and
-  `tcp_trace (qinit_tcp rm (f j)) = tcp_trace (f j)` is exactly
-  `qinit_tcp_trace`.
-- **`rtcpL`** needs `sem_qinit` applied to `rtcpL (r rm) = tcp_ptrace (tcp_sum
-  (tensor f g)) = tcp_sum (fun j => tcp_scale (tcp_trace (g j)) (f j))`
-  (`tcp_ptrace_tensor`) versus `tcp_sum (fun j => tcp_scale (tcp_trace (g j))
-  (qinit_tcp rm (f j)))` -- i.e. `qinit_tcp rm` needs to commute with
-  `tcp_scale` and `tcp_sum`, which is exactly `qinit_tcp_scale`/`qinit_tcp_sum`,
-  already proved. **Not yet checked**: that the resulting expression actually
-  matches `sem_qinit`'s definition in `Semantics.v` on the nose (they should
-  be definitionally the same formula, but this has not been verified by
-  compiling `rcqs_projL_qinit`).
-
-Every piece above is either already proved or reduces to facts already in the
-file; nothing here is expected to need a new axiom. The next session's
-opening move is the witness definition and these two projection lemmas.
+**So `rule_QInit1` is sequenced after §7f, not before it.** Do Lemma 29/30's
+Schmidt axiom there, where its other consumer (Lemma 32, also this
+register) can be seen at the same time, then return here. Everything landed
+this session (`qinit_tcp` and friends, the `pdiv`/`himg_unitary` fix) is
+still exactly what the witness side will need; only the postcondition step
+was missing a piece, and now it is named rather than silently assumed away.
 
 ### 7e. `JointMeasureSimple` (Lem 64)
 
@@ -596,14 +605,22 @@ pair of independently-updated classical variables), but the Fubini-regrouping
 technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 `Y * (cmem * X)`) should port directly.
 
-### 7f. §4.4's two remaining lemmas
+### 7f. §4.4's two remaining lemmas — now on `QInit1`'s critical path
 
 - **Lemma 29 / Corollary 30** needs the Schmidt decomposition (paper Lemma 7)
   as a new axiom. The *converse* direction — the one the examples use, to
   *establish* a quantum equality — is six lines and needs only that `U₁`, `U₂`
-  are isometries. Do that first.
+  are isometries. Do that first. **The Schmidt decomposition itself
+  (existence, the forward direction, needing the new axiom) is what §7d's
+  `rule_QInit1` postcondition proof is blocked on** — extracting individual
+  terms from a sum known to lie in a subspace needs the terms' `Q`-parts to
+  be orthogonal, which only Schmidt supplies (see §7d's dead end with
+  `tcp_decompose` for exactly why that axiom doesn't substitute). Land the
+  axiom and the decomposition theorem itself before returning to §7d, with
+  both consumers (this and `QInit1`) in view.
 - **Lemma 32** is the register-coherence statement of §7d; it falls out of the
-  same work.
+  same work, and now has a running start: `rUsplit_qidx_SL` (§7d) is exactly
+  the operator identity Lemma 32 needs for one side.
 
 ### 7g. Then Phase 1e onward
 
