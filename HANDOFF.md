@@ -274,8 +274,8 @@ inventory in `AXIOMS.md`, which is where the statements live.
 | Preimages of subspaces | 1 | 1 |
 | Tensor product | 4 | 13 |
 | Reindexing | 1 | 3 |
-| Positive trace-class operators | 14 | 71 |
-| **total** | **44** | **128** |
+| Positive trace-class operators | 14 | 73 |
+| **total** | **44** | **130** |
 
 Additions since Lemma 36's converse was proved (this count; `make axioms`
 regenerates `AXIOMS.md`, which is authoritative): **`op_ext_ket`** (replacing
@@ -283,12 +283,25 @@ regenerates `AXIOMS.md`, which is authoritative): **`op_ext_ket`** (replacing
 **`tcp_conj_pswap`** (the factor-swap versions of the existing
 partial-trace/tensor laws -- textbook, but not derivable from `op_ext_ket`
 alone, since the swap's action on a general non-ket vector is exactly the
-continuity gap the signature declines to expose), and at +1, **`tcp_proj_vscale`**
+continuity gap the signature declines to expose), at +1, **`tcp_proj_vscale`**
 (rescaling a vector rescales its projection by the modulus squared -- needed
-to normalize the unnormalized vectors `tcp_decompose` hands back; see §7a).
-Everything landed for Lemma 36's converse itself (steps 1-4 of the old §7a
-plan, and the theorem's own assembly) added **zero** further axioms --
-`make assumptions` is unchanged from before that work.
+to normalize the unnormalized vectors `tcp_decompose` hands back; see §7a),
+and, most recently, at +2, **`tcp_ptrace2_passoc`** / **`tcp_ptrace_passoc`**
+(partial trace commutes with reassociating a tensor product, in each of the
+two directions that matter -- see §7d for exactly where `QInit1`'s witness
+needs each one). Everything landed for Lemma 36's converse itself (steps 1-4
+of the old §7a plan, and the theorem's own assembly) added **zero** further
+axioms -- `make assumptions` is unchanged from before that work, and is also
+unchanged by the `passoc` pair.
+
+**`tcp_ptrace2_passoc`/`tcp_ptrace_passoc` have no consumer yet.** They are
+added ahead of `rule_QInit1` itself, which is not proved in this session. That
+is normally exactly what the hygiene rule (never speculative) forbids; it is
+legitimate here only because §7d derives, by hand, the precise two call sites
+in the witness's projection proofs that need each one -- not a vague "the rule
+will probably need something like this". If `rule_QInit1` is abandoned or
+takes a different shape than §7d describes, revisit whether these are still
+used, and remove them if not.
 
 Discipline when adding one: it must be a statement you could cite a textbook
 for; it must be *used* by a proof you are writing now (never speculatively);
@@ -524,30 +537,54 @@ already landed for it -- reassociating `(qsub Q * qsub Qᶜ) * qmem` into
 `qsub Q * (qsub Qᶜ * qmem)` is what lets the witness trace out just `qsub Q`
 via `tcp_ptraceL` (= `tcp_ptrace2`, which keeps the *second* factor).
 
-The concrete shape for next time, on `tcp (qmem * qmem)`:
-```
-tcp_conj (tensoro (Usplit Q) oid)
-  (tcp_tensor (tcp_proj psi)
-     (tcp_ptraceL (tcp_conj Uprodassoc
-        (tcp_conj (tensoro (oadj (Usplit Q)) oid) rho))))
-```
-wrapped in `tcp_conj (oadj Urqpair) (... (tcp_conj Urqpair (r rm)))` to land
-back on `rqmem`; `psi := oapp (oadj (Urelab SL Q)) (ev e (csel SL rm))`, using
-`Urelab` a second time to place the fresh state. Two traps to check *before*
-writing the projection proofs, not after:
+**Update: the concrete shape below was wrong in the first draft of this
+note** -- it had a type error (feeding `tcp_tensor (tcp_proj psi) Y''`,
+of type `qsub Q * (qsub Qc * qmem)`, straight into an operator expecting
+`(qsub Q * qsub Qc) * qmem`) that surfaced only once the two projections
+were actually worked out by hand. Corrected shape, on `tcp (qmem * qmem)`,
+with `Q1 := tensoro (oadj (Usplit Q)) oid`, `Q2 := tensoro (Usplit Q) oid`:
 
-- **The right projection is only unchanged if `psi` is normalized.**
-  `tcp_ptrace2 (tcp_tensor A B) = tcp_scale (tcp_trace A) B`, so an
-  un-normalized fresh state *scales* the untouched side. `wt (QInit P e)`
-  (`Syntax.v`) is presumably where that normalization hypothesis lives --
-  `sem_qinit_trace_pt` (`Semantics.v:867`) already needs it and
-  `denote_wf_trace`'s `QInit` clause already threads it through `Hwt`. Confirm
-  the exact shape and carry it as a rule hypothesis from the start.
-- **Separability needs `tcp_ptraceL` to distribute over a tensor the way
-  `actL_sep` (`Rules/Quantum.v`) needs `tcp_conj` to.** Check whether
-  `tcp_conj_tensor` composing with `tcp_ptrace2_tensor` already gives
-  `tcp_ptraceL (tcp_conj (tensoro A oid) (tcp_tensor X Y)) = tcp_scale (tcp_trace (tcp_conj A X)) Y`-shaped
-  facts, or whether that composition is itself a missing lemma.
+```
+F(rho) := tcp_conj Q2 (tcp_conj (oadj Uprodassoc)
+            (tcp_tensor (tcp_proj psi)
+               (tcp_ptrace2 (tcp_conj Uprodassoc (tcp_conj Q1 rho)))))
+```
+wrapped in `tcp_conj (oadj Urqpair) (F (tcp_conj Urqpair (r rm)))` to land
+back on `rqmem`; `psi := oapp (oadj (Urelab SL Q)) (ev e (csel SL rm))`,
+using `Urelab` a second time to place the fresh state. `Uprodassoc` is used
+*twice*, once each direction, which is exactly why both `tcp_ptrace2_passoc`
+and `tcp_ptrace_passoc` were added (S6) rather than just one:
+
+- **`rtcpR` (right projection, unchanged since the right program is `skip`)**
+  needs `tcp_ptrace2 (F (rho)) = tcp_ptrace2 (rho)`. Push `tcp_ptrace2`
+  through `Q2` via the *existing* `tcp_ptrace2_conj_tensorL` (needs `Usplit Q`
+  an isometry, which it is), reducing to `tcp_ptrace2` of the argument of
+  `tcp_conj (oadj Uprodassoc)` -- exactly `tcp_ptrace_Uprodassoc`'s shape but
+  for `tcp_ptrace2`, so this direction turned out to need
+  `tcp_ptrace2_conj_tensorL` plus the *already existing* laws, not a third
+  axiom. Then `tcp_ptrace2 (tcp_tensor (tcp_proj psi) Y'') = tcp_scale
+  (tcp_trace (tcp_proj psi)) Y''` (`tcp_ptrace2_tensor`) -- **only equal to
+  `Y''` (hence to what it needs to be) if `tcp_trace (tcp_proj psi) = 1`,
+  i.e. `psi` is normalized.** `wt (QInit P e)` (`Syntax.v`) is exactly
+  `forall m, inner (ev e m) (ev e m) = C1` -- confirmed, this is where the
+  normalization hypothesis lives, and `sem_qinit_trace_pt`
+  (`Semantics.v:867`)/`denote_wf_trace`'s `QInit` clause already consume it
+  the same way. Carry `wt (QInit P e)` as a rule hypothesis from the start.
+- **`rtcpL` (left projection, must equal `sem_qinit` applied to the left
+  marginal) and separability** are where `tcp_ptrace2_passoc` /
+  `tcp_ptrace_passoc` are actually consumed: computing `tcp_ptrace (F(rho))`
+  needs `tcp_ptrace_Uprodassoc` (the `oadj Uprodassoc` direction, reassociating
+  *back* after tensoring `psi` in) composed with `tcp_ptrace_conj_tensorL`;
+  separability -- decomposing `rho = tensor f g` and showing `F` sends it to
+  another tensor -- needs `tcp_ptrace2_Uprodassoc` (the forward direction,
+  reassociating *before* discarding `qsub Q`) applied to
+  `X := tcp_conj (oadj (Usplit Q)) f`, which is opaque (not assumed
+  separable itself) -- exactly why the axiom is stated for a general
+  `X : tcp (A * B)`, not a further-decomposed one. For the *sum* that
+  `rsep` actually hands back (not a single tensor), apply this per summand
+  and lift through the existing `tcp_conj_sum`/`tcp_ptrace2_sum` linearity
+  laws -- do not add a third axiom for the summed case if this is where the
+  proof gets stuck; reread this paragraph first.
 
 ### 7e. `JointMeasureSimple` (Lem 64)
 
