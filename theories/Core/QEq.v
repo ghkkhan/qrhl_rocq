@@ -221,13 +221,27 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
           if [psi1 (x) psi2 in (U1 Q1 =quant U2 Q2)] then the registers
           factor out, [psi_i = psi_i^Q (x) psi_i^Y], with
           [U1 U_vars,Q1^* psi_1^Q = U2 U_vars,Q2^* psi_2^Q].
-        The paper's proof runs on a Schmidt decomposition (its Lemma 7), which
-        is not in the substrate signature. Adding it is the next new axiom this
-        development needs, and the forward direction is about a page of
-        orthonormality bookkeeping. The converse -- the direction one uses to
-        *establish* a quantum equality, and the one the examples need -- is six
-        lines and needs only that [U1], [U2] are isometries; it should land
-        first.
+        The paper's proof runs on a Schmidt decomposition (its Lemma 7).
+        **This is not addable as one more axiom in the existing vocabulary**:
+        it is a *countable coherent vector sum* (a superposition, converging
+        in norm), and the signature has no such primitive -- [vadd]/[vscale]
+        are binary only, and [tcp_sum] sums positive trace-class operators as
+        a *mixture*, which cannot substitute (a pure state's [tcp_proj] has
+        rank 1 always; a [tcp_sum] of several non-collinear rank-1
+        projections does not). Adding a coherent countable vector sum widens
+        the continuity boundary that is this project's central soundness
+        claim, and is a decision for the project's owner, not a mid-proof
+        call -- see HANDOFF.md S7f. **The converse direction is also not the
+        "six lines, isometries only" the paper's proof structure suggests
+        for this encoding**: [qeqOp] here routes through [rWsplit2] (the
+        combined-register split of [Q1] and [Q2] together), and relating
+        [rprod v1 v2] (built from [Urqpair] plus the two *individual* splits
+        [Usplit Q1]/[Usplit Q2]) to that combined split is a register
+        coherence layer comparable in size to [rUsplit_qidx_SL]
+        (`Registers.v`), not a one-liner. See HANDOFF.md S7f for both
+        findings in full, including that [Urelab] (`Registers.v`) and
+        [UYL]/[UYR] just below are the same construction in opposite
+        directions -- reuse one rather than building a third copy.
 
       - Lemma 32, [(A1»Q1) . (U1 Q1 =quant U2 Q2) = (U1 A1^adj) Q1 =quant U2 Q2]
         for unitary [A1], which is how rule QApply1's preconditions get
@@ -235,8 +249,9 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         is not the paper's argument, which is short, but a missing piece of
         register theory: it relates [rolift Q1], a lift over one register, to
         [rolift (Q1 u Q2)], a lift over the combined one, and the coherence
-        between nested lifts is not proved yet. That coherence is worth having
-        on its own account -- rules Frame and Equal will need it too.
+        between nested lifts is not proved yet -- the same [rWsplit2] gap
+        Lemma 29's converse hits above. That coherence is worth having on
+        its own account -- rules Frame and Equal will need it too.
 
       Lemmas 33 and 34 build on 29 and are further out. *)
 

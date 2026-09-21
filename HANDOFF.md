@@ -605,22 +605,77 @@ pair of independently-updated classical variables), but the Fubini-regrouping
 technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 `Y * (cmem * X)`) should port directly.
 
-### 7f. §4.4's two remaining lemmas — now on `QInit1`'s critical path
+### 7f. §4.4's two remaining lemmas — a substrate-capability question, not an axiom
 
-- **Lemma 29 / Corollary 30** needs the Schmidt decomposition (paper Lemma 7)
-  as a new axiom. The *converse* direction — the one the examples use, to
-  *establish* a quantum equality — is six lines and needs only that `U₁`, `U₂`
-  are isometries. Do that first. **The Schmidt decomposition itself
-  (existence, the forward direction, needing the new axiom) is what §7d's
-  `rule_QInit1` postcondition proof is blocked on** — extracting individual
-  terms from a sum known to lie in a subspace needs the terms' `Q`-parts to
-  be orthogonal, which only Schmidt supplies (see §7d's dead end with
-  `tcp_decompose` for exactly why that axiom doesn't substitute). Land the
-  axiom and the decomposition theorem itself before returning to §7d, with
-  both consumers (this and `QInit1`) in view.
-- **Lemma 32** is the register-coherence statement of §7d; it falls out of the
-  same work, and now has a running start: `rUsplit_qidx_SL` (§7d) is exactly
-  the operator identity Lemma 32 needs for one side.
+**Update: both estimates in this section (from before this session, and
+repeated in `QEq.v`'s "Not yet here" comment) turned out to be wrong, in a
+way worth stating precisely rather than just "harder than thought" again.**
+
+**Lemma 7 (Schmidt decomposition) is not addable as one more textbook axiom
+in the existing vocabulary.** It states `psi = Σᵢ λᵢ ψᵢˣ ⊗ ψᵢʸ` for
+`psi ∈ l2[XY]` — a *countable coherent vector sum* (a linear combination
+converging in Hilbert-space norm). The signature has no such thing:
+`vadd`/`vscale` (`Interface.v`) are binary only, and `tcp_sum` (the
+substrate's only infinite-sum primitive) sums *positive trace-class
+operators* as a **mixture**, not vectors as a **superposition** — these are
+different operations, and one cannot stand in for the other. Concretely:
+`tcp_proj psi` (a pure state's density operator) has rank exactly 1 always;
+a `tcp_sum` of several pairwise-non-collinear rank-1 projections has rank
+greater than 1; so no non-trivial `tcp_sum` of product-state projections can
+ever equal `tcp_proj psi` for an entangled `psi`, regardless of how the
+projections are chosen. Decomposing `tcp_ptrace2 (tcp_proj psi)` (the
+*reduced* state) via the existing `tcp_decompose` is a genuinely different,
+weaker fact — it decomposes a mixture that has already forgotten `psi`'s
+phase/coherence information, and gives no way back to a decomposition of
+`psi` itself with orthogonal factors. Adding a coherent countable vector sum
+is a new *category* of substrate capability, not an axiom instance, and it
+widens the continuity boundary that is this project's central soundness
+claim (`Interface.v`'s repeated "the signature does not expose the
+continuity of the inner product" comments are precisely this boundary).
+That is a decision for whoever owns the project's scope, not a call to make
+mid-proof.
+  - `hspan` (the closed span of an arbitrary generating *set*, no
+    coefficients named) was checked as a possible way to express "`psi` lies
+    in the closed span of these product vectors" without needing a
+    coherent sum. It does not obviously discharge what `QInit1` needs: the
+    postcondition step needs to extract *individual* orthogonal components
+    from a subspace-membership fact, and neither `hspan` nor any existing
+    lemma characterizes that; there is also no `tcp_supp`-vs-`htensor`
+    axiom (`tcp_supp (tcp_tensor r s)` related to `htensor (tcp_supp r)
+    (tcp_supp s)`) that would let the argument run at the support level
+    instead of the vector level. Both gaps are worth knowing before
+    re-deriving them from scratch.
+  - **The "converse direction, six lines" estimate is also wrong for this
+    encoding**, independent of Schmidt. The paper's six lines apply
+    `Û₂*Û₁ ⊗ Û₁*Û₂ ⊗ id` as one tensor expression to `ψ1 ⊗ ψ2` directly.
+    Here, `qeqOp`'s definition (`QEq.v`) routes through
+    `rolift (rqunion Q1 Q2) ∘ rWsplit2 Q1 Q2 Hd ∘ Uswap ∘ tensoro (…) ∘
+    (rWsplit2 Q1 Q2 Hd)†`, and relating `rprod v1 v2` (built from `Urqpair`
+    plus the two *individual* register splits `Usplit Q1`/`Usplit Q2`) to
+    `rWsplit2`'s *combined*-register split is a third register-coherence
+    layer, comparable in size to `rUsplit_qidx_SL` (§7d) -- not a "needs
+    only isometries" one-liner. `QEq.v`'s own comment repeating "six lines"
+    should be corrected alongside this note.
+  - **`Urelab` (`Registers.v`, built for §7d) and `UYL`/`UYR` (`QEq.v`,
+    pre-existing) are the same construction in opposite directions**:
+    `UYL Y : op (qsub Y) (rqsub (qidx SL Y))` is `oadj (Urelab SL Y)` up to
+    direction. Neither was built with the other in mind. A future session
+    building Lemma 29 should reuse one of them rather than a third copy.
+
+**Lemma 32** is the register-coherence statement this section's earlier note
+also names; it falls out of the same `rWsplit2`/`Urqpair` coherence work as
+Lemma 29's converse, and `rUsplit_qidx_SL` (§7d) is a partial running start
+(it covers the single-register case; Lemma 32/29's combined-register case is
+the "third layer" above).
+
+**Open decision for the project owner, not a mid-task call:** whether to (a)
+add a countable coherent vector sum to the substrate signature, accepting
+the widened continuity boundary, so Lemma 7/29's forward direction and
+`QInit1`'s postcondition can proceed as planned; (b) restrict Lemma 29 (and
+whatever `QInit1` needs) to a special case that avoids it, if one covers
+what the EPR examples actually require; or (c) leave `QInit1` and Lemma
+29's forward direction deferred, and move on to `JointMeasureSimple` (§7e),
+which does not appear to need any of this.
 
 ### 7g. Then Phase 1e onward
 
