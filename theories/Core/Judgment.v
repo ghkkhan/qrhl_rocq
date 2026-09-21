@@ -1000,6 +1000,109 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       reflexivity.
   Qed.
 
+  (** The spectral theorem, pushed through separability: a separable
+      [rho in T^+[V1 V2]] is a (possibly infinite) sum of pure products.
+      [tcp_decompose] gives each tensor factor as a sum of rank-one
+      projections ([tcp_decompose]); [tcp_tensor_sum_sum] flattens the
+      resulting tensor of two sums into one sum over the pair of indices;
+      [tcp_sum_sigma] flattens that, in turn, against the outer sum
+      [tcp_sep] itself provides. Needed by the converse of Lemma 36 to turn
+      an arbitrary separable state satisfying [A] into a family of pure
+      states each satisfying [A], to which [qrhl_pure] applies. *)
+  Lemma rsep_pure_decompose (rho : tcp rqmem) :
+    rsep rho ->
+    exists (K : Type) (phi psi : K -> l2 qmem),
+      tcp_summable (fun k => tcp_proj (rprod (phi k) (psi k)))
+      /\ rho = tcp_sum (fun k => tcp_proj (rprod (phi k) (psi k))).
+  Proof.
+    intros [J [f [g [Hfg Heq]]]].
+    assert (Hdecf : forall j : J,
+      { A : Type & { phi0 : A -> l2 qmem |
+          tcp_summable (fun a => tcp_proj (phi0 a)) /\
+          f j = tcp_sum (fun a => tcp_proj (phi0 a)) } }).
+    { intros j.
+      destruct (constructive_indefinite_description _ (tcp_decompose qmem (f j))) as [A HA].
+      destruct (constructive_indefinite_description _ HA) as [phi0 Hphi0].
+      exists A, phi0; exact Hphi0. }
+    assert (Hdecg : forall j : J,
+      { B : Type & { psi0 : B -> l2 qmem |
+          tcp_summable (fun b => tcp_proj (psi0 b)) /\
+          g j = tcp_sum (fun b => tcp_proj (psi0 b)) } }).
+    { intros j.
+      destruct (constructive_indefinite_description _ (tcp_decompose qmem (g j))) as [B HB].
+      destruct (constructive_indefinite_description _ HB) as [psi0 Hpsi0].
+      exists B, psi0; exact Hpsi0. }
+    set (A := fun j => projT1 (Hdecf j)).
+    set (phi0 := fun j => proj1_sig (projT2 (Hdecf j))).
+    set (B := fun j => projT1 (Hdecg j)).
+    set (psi0 := fun j => proj1_sig (projT2 (Hdecg j))).
+    assert (HphiA : forall j, tcp_summable (fun a : A j => tcp_proj (phi0 j a)))
+      by (intros j; apply (proj1 (proj2_sig (projT2 (Hdecf j))))).
+    assert (Hfj : forall j, f j = tcp_sum (fun a : A j => tcp_proj (phi0 j a)))
+      by (intros j; apply (proj2 (proj2_sig (projT2 (Hdecf j))))).
+    assert (HpsiB : forall j, tcp_summable (fun b : B j => tcp_proj (psi0 j b)))
+      by (intros j; apply (proj1 (proj2_sig (projT2 (Hdecg j))))).
+    assert (Hgj : forall j, g j = tcp_sum (fun b : B j => tcp_proj (psi0 j b)))
+      by (intros j; apply (proj2 (proj2_sig (projT2 (Hdecg j))))).
+    set (K1 := fun j : J => sigT (fun _ : A j => B j)).
+    set (Phi1 := fun (j : J) (p : K1 j) => phi0 j (projT1 p)).
+    set (Psi1 := fun (j : J) (p : K1 j) => psi0 j (projT2 p)).
+    assert (HF1 : forall j,
+      tcp_summable (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p)))
+      /\ tcp_tensor (f j) (g j)
+         = tcp_sum (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p)))).
+    { intros j.
+      destruct (tcp_tensor_sum_sum (fun a : A j => tcp_proj (phi0 j a))
+                  (fun b : B j => tcp_proj (psi0 j b)) (HphiA j) (HpsiB j))
+        as [Hsum Heqten].
+      assert (Heq3 : (fun p : K1 j => tcp_tensor (tcp_proj (Phi1 j p)) (tcp_proj (Psi1 j p)))
+                     = (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p))))
+        by (apply funext; intros p; apply tcp_tensor_proj).
+      rewrite <- Heq3; split; [ exact Hsum |].
+      rewrite Hfj, Hgj; exact Heqten. }
+    assert (Hjsum : forall j, tcp_summable (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p))))
+      by (intros j; apply (proj1 (HF1 j))).
+    assert (Hjeq : forall j, tcp_tensor (f j) (g j)
+                   = tcp_sum (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p))))
+      by (intros j; apply (proj2 (HF1 j))).
+    assert (Houter : tcp_summable
+      (fun j => tcp_sum (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p))))).
+    { assert (Heq4 : (fun j => tcp_sum (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p))))
+                     = (fun j => tcp_tensor (f j) (g j)))
+        by (apply funext; intros j; symmetry; apply Hjeq).
+      rewrite Heq4; exact Hfg. }
+    destruct (tcp_sum_sigma (qmem * qmem) J K1
+                (fun j (p : K1 j) => tcp_proj (tensorv (Phi1 j p) (Psi1 j p)))
+                Hjsum Houter) as [Hsig Heqsig].
+    set (K := sigT K1).
+    set (phi := fun k : K => Phi1 (projT1 k) (projT2 k)).
+    set (psi := fun k : K => Psi1 (projT1 k) (projT2 k)).
+    exists K, phi, psi.
+    assert (Hrho2 : tcp_conj Urqpair rho
+                    = tcp_sum (fun k : K => tcp_proj (tensorv (phi k) (psi k)))).
+    { rewrite Heq.
+      assert (Heq5 : (fun j => tcp_tensor (f j) (g j))
+                     = (fun j => tcp_sum (fun p : K1 j => tcp_proj (tensorv (Phi1 j p) (Psi1 j p)))))
+        by (apply funext; exact Hjeq).
+      rewrite Heq5; exact Heqsig. }
+    assert (Hconv : forall k : K,
+      tcp_conj (oadj Urqpair) (tcp_proj (tensorv (phi k) (psi k)))
+      = tcp_proj (rprod (phi k) (psi k))).
+    { intros k; rewrite <- tcp_tensor_proj, <- rprod_proj; reflexivity. }
+    split.
+    - assert (Heq7 : (fun k : K => tcp_proj (rprod (phi k) (psi k)))
+                     = (fun k : K => tcp_conj (oadj Urqpair) (tcp_proj (tensorv (phi k) (psi k)))))
+        by (apply funext; intros k; symmetry; apply Hconv).
+      rewrite Heq7.
+      apply (tcp_summable_conj (oadj Urqpair) _ (oisometry_oadj Urqpair Urqpair_unitary)).
+      exact Hsig.
+    - assert (Heq8 : rho = tcp_conj (oadj Urqpair) (tcp_conj Urqpair rho))
+        by (symmetry; apply tcp_conj_adjUrqpair_roundtrip).
+      rewrite Heq8, Hrho2.
+      rewrite (tcp_conj_sum _ _ _ _ _ Hsig).
+      f_equal; apply funext; intros k; apply Hconv.
+  Qed.
+
   (** The two projections of a point mass are point masses. *)
   Lemma rcqs_projL_rdirac (m1 m2 : cmem) (rho : tcp rqmem) :
     rcqs_projL (rdirac (m1, m2) rho) = cqdirac m1 (rtcpL rho).
