@@ -81,6 +81,7 @@ because they remove a large fraction of Appendix A's notational overhead:
 | 1c | quantum equality (Def 27, Lem 31); `Y₁ ≡quant Y₂` | **done**; Lem 29/32 deferred (see below) |
 | 1c | Definition 35 (the judgment), Lemma 36 → | **done**; Lemma 36 ← deferred |
 | 1d | `Skip` `Conseq` `Seq` `Case` `QApply1` `Assign1` `If1` `JointIf` `Sample1` `Measure1` | **done** |
+| 2 | `QrhlElim` (Lemma 50) and its equality form | **done** (ahead of its phase) |
 | 1d | the other 3 vertical-slice rules | in progress, see below |
 | 1e | Ltac2 tactics, EPR + EPR-measure examples | not started |
 | 2 | `Sym` `Frame` `Equal` `QrhlElim(Eq)`, loops | not started |
@@ -156,6 +157,21 @@ projections), which is also precisely what the converse of Lemma 36 was
 waiting on. Note that `Case` carries `wt`/`loopfree` side conditions the
 paper's rule does not: they come from `denote_sum`, and go away once the
 `while` clause is added to that induction.
+
+`QrhlElim` (Lemma 50) is proved, out of phase order, because it is what makes
+the logic usable: it is how a judgment turns into a statement about
+probabilities, and so it is the last step of any game-based proof. The paper's
+two side conditions — that `ρ₁` and `ρ₂` are the marginals of `ρ` up to the
+renaming that puts a single-sided state on side *i* — are not hypotheses here:
+Definition 35's projections already land in `cqs` on the nose, so `ρ₁` *is*
+`rcqs_projL ρ`. The argument is then short: write both probabilities as sums
+of the witness's trace over pairs of memories, keeping on the left those pairs
+whose `m₁` satisfies `e` and on the right those whose `m₂` satisfies `f`; the
+postcondition says the first set of pairs is inside the second wherever the
+witness is nonzero, so the comparison is pointwise. The equality form
+(`QrhlElimEq`'s core, with `Cla[idx₁ e ⟺ idx₂ f]`) follows from the two
+inequalities. `QrhlElimEq` proper additionally needs locality, so it is still
+outstanding.
 
 `Measure1` completes the family of one-sided rules. Its shape is `Sample1`'s
 with a conjugation by the outcome's projector where the subdistribution's

@@ -14,7 +14,7 @@
     ones. Everything else in Figure 1 needs either the converse of Lemma 36 or
     locality machinery; see the note at the end. *)
 
-From Stdlib Require Import List Lra.
+From Stdlib Require Import List Bool Lra.
 From QRHL.Substrate Require Import Ambient Cnum Sums Interface Theory.
 From QRHL.Core Require Import
   Vars Expr Registers Syntax Semantics Predicate QEq Judgment.
@@ -254,6 +254,231 @@ Module GeneralRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
       rewrite <- (denote_sum d Hwtd Hlfd Z _ (rcqs_fam_projR rz Hfamz)).
       rewrite <- (rcqs_projR_sum rz Hfamz).
       unfold rz; rewrite case_part_sum; reflexivity.
+  Qed.
+
+  (* ================================================================= *)
+  (** ** QrhlElim  [Figure 1, Lemma 50, p. 50]
+
+<<
+         rho in T^+_cq[V1 V2] is separable      rho satisfies A
+         E_{rename,idx_1}(rho_1) = tr^{[V1]}_{V2} rho
+         E_{rename,idx_2}(rho_2) = tr^{[V2]}_{V1} rho
+         {A} c ~ d {Cla[idx_1 e ==> idx_2 f]}
+        -----------------------------------------------------------
+         Pr[e : c(rho_1)] <= Pr[f : d(rho_2)]
+>>
+
+      "Rule QrhlElim allows us to deduce statements about probabilities from
+      qRHL judgments. As the final goal of a proof in qRHL is to make
+      statements about, e.g., attack probabilities, it is necessary to
+      translate the judgments into statements about probabilities of certain
+      events in programs."
+
+      The paper's two side conditions on [rho_1] and [rho_2] say that they are
+      the two marginals of [rho] up to the renaming that puts a single-sided
+      state on side [i]. Here the projections of Definition 35 already land in
+      [cqs], on the nose, so the conditions are not hypotheses but the way the
+      conclusion is stated: [rho_1] *is* [rcqs_projL rho].
+
+      The argument is the one behind the rule and nothing more. Take the
+      witness [rho']. Summing the trace of [rho'] over pairs [(m1, m2)] gives
+      each probability: on the left, keeping the pairs whose [m1] satisfies
+      [e]; on the right, those whose [m2] satisfies [f]. The postcondition
+      says that wherever [rho'] is nonzero the first set of pairs is contained
+      in the second, so the comparison is pointwise. *)
+
+  Section Elim.
+    Context (r' : rcqs) (Hwf' : rcqs_wf r').
+
+    Lemma Pr_sum_pairs_L (e : expr bool) :
+      tsum (fun m1 => if ev e m1 then tcp_trace (rcqs_projL r' m1) else 0%R)
+      = tsum (fun p : cmem * cmem => if ev e (fst p) then tcp_trace (r' (fst p, snd p)) else 0%R).
+    Proof.
+      set (G := fun (m1 m2 : cmem) =>
+                  if ev e m1 then tcp_trace (r' (m1, m2)) else 0%R).
+      assert (Hpos : forall m1, nonneg (G m1)).
+      { intros m1 m2; unfold G; destruct (ev e m1);
+          [ apply tcp_trace_nonneg | apply Rle_refl ]. }
+      assert (Hsum : forall m1, summable (G m1)).
+      { intros m1; apply (summable_mono _ (fun m2 => tcp_trace (r' (m1, m2)))).
+        - apply (summable_inj (fun m2 : cmem => ((m1, m2) : rcmem))
+                              (fun rm : rcmem => tcp_trace (r' rm)));
+            [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hwf' ].
+        - intros m2; unfold G; destruct (ev e m1);
+            [ apply Rle_refl | apply tcp_trace_nonneg ]. }
+      assert (Hval : forall m1,
+                 tsum (G m1)
+                 = (if ev e m1 then tcp_trace (rcqs_projL r' m1) else 0%R)).
+      { intros m1; unfold G; rewrite (rcqs_projL_trace r' m1 Hwf').
+        destruct (ev e m1); [ reflexivity | apply tsum_zero; reflexivity ]. }
+      assert (Hit : summable (fun m1 => tsum (G m1))).
+      { assert (Heq : (fun m1 => tsum (G m1))
+                      = (fun m1 => if ev e m1
+                                   then tcp_trace (rcqs_projL r' m1) else 0%R))
+          by (apply funext; exact Hval).
+        rewrite Heq.
+        apply (summable_mono _ (fun m1 => tcp_trace (rcqs_projL r' m1)));
+          [ apply tcp_summable_trace, rcqs_projL_wf; exact Hwf' |].
+        intros m1; destruct (ev e m1);
+          [ apply Rle_refl | apply tcp_trace_nonneg ]. }
+      destruct (tsum_tonelli G Hpos Hsum Hit) as [_ Hpair].
+      transitivity (tsum (fun m1 : cmem => tsum (G m1)));
+        [ f_equal; apply funext; intros m1; symmetry; apply Hval |].
+      rewrite <- Hpair; reflexivity.
+    Qed.
+
+    Lemma Pr_sum_pairs_R (f : expr bool) :
+      tsum (fun m2 => if ev f m2 then tcp_trace (rcqs_projR r' m2) else 0%R)
+      = tsum (fun p : cmem * cmem => if ev f (snd p) then tcp_trace (r' (fst p, snd p)) else 0%R).
+    Proof.
+      set (G := fun (m2 m1 : cmem) =>
+                  if ev f m2 then tcp_trace (r' (m1, m2)) else 0%R).
+      assert (Hpos : forall m2, nonneg (G m2)).
+      { intros m2 m1; unfold G; destruct (ev f m2);
+          [ apply tcp_trace_nonneg | apply Rle_refl ]. }
+      assert (Hsum : forall m2, summable (G m2)).
+      { intros m2; apply (summable_mono _ (fun m1 => tcp_trace (r' (m1, m2)))).
+        - apply (summable_inj (fun m1 : cmem => ((m1, m2) : rcmem))
+                              (fun rm : rcmem => tcp_trace (r' rm)));
+            [ intros a b Hab; congruence | apply tcp_summable_trace; exact Hwf' ].
+        - intros m1; unfold G; destruct (ev f m2);
+            [ apply Rle_refl | apply tcp_trace_nonneg ]. }
+      assert (Hval : forall m2,
+                 tsum (G m2)
+                 = (if ev f m2 then tcp_trace (rcqs_projR r' m2) else 0%R)).
+      { intros m2; unfold G; rewrite (rcqs_projR_trace r' m2 Hwf').
+        destruct (ev f m2); [ reflexivity | apply tsum_zero; reflexivity ]. }
+      assert (Hit : summable (fun m2 => tsum (G m2))).
+      { assert (Heq : (fun m2 => tsum (G m2))
+                      = (fun m2 => if ev f m2
+                                   then tcp_trace (rcqs_projR r' m2) else 0%R))
+          by (apply funext; exact Hval).
+        rewrite Heq.
+        apply (summable_mono _ (fun m2 => tcp_trace (rcqs_projR r' m2)));
+          [ apply tcp_summable_trace, rcqs_projR_wf; exact Hwf' |].
+        intros m2; destruct (ev f m2);
+          [ apply Rle_refl | apply tcp_trace_nonneg ]. }
+      destruct (tsum_tonelli G Hpos Hsum Hit) as [_ Hpair].
+      (* the pair index comes out as (m2, m1); swap it *)
+      transitivity (tsum (fun q : cmem * cmem => G (fst q) (snd q))).
+      { rewrite Hpair; f_equal; apply funext; intros m2; symmetry; apply Hval. }
+      apply (tsum_swap_pair
+               (fun p : cmem * cmem =>
+                  if ev f (snd p) then tcp_trace (r' (fst p, snd p))
+                  else 0%R)).
+      apply (summable_mono _ (fun p : cmem * cmem => tcp_trace (r' (fst p, snd p))));
+          [ apply rcqs_pairs_summable; exact Hwf' |].
+      intros p; destruct (ev f (snd p));
+        [ apply Rle_refl | apply tcp_trace_nonneg ].
+    Qed.
+
+    (** The comparison itself: pointwise on the pairs. *)
+    Lemma Pr_le_of_witness (e f : expr bool) :
+      (forall m1 m2, r' (m1, m2) <> tcp_zero ->
+                     ev e m1 = true -> ev f m2 = true) ->
+      (tsum (fun m1 => if ev e m1 then tcp_trace (rcqs_projL r' m1) else 0%R)
+       <= tsum (fun m2 => if ev f m2 then tcp_trace (rcqs_projR r' m2) else 0%R))%R.
+    Proof.
+      intros Himp.
+      rewrite Pr_sum_pairs_L, Pr_sum_pairs_R.
+      apply tsum_mono.
+      - intros p; destruct (ev e (fst p));
+          [ apply tcp_trace_nonneg | apply Rle_refl ].
+      - apply (summable_mono _ (fun p : cmem * cmem => tcp_trace (r' (fst p, snd p))));
+          [ apply rcqs_pairs_summable; exact Hwf' |].
+        intros p; destruct (ev f (snd p));
+          [ apply Rle_refl | apply tcp_trace_nonneg ].
+      - intros [m1 m2]; cbn [fst snd].
+        destruct (ev e m1) eqn:He;
+          [| destruct (ev f m2);
+             [ apply tcp_trace_nonneg | apply Rle_refl ] ].
+        destruct (classic (r' (m1, m2) = tcp_zero)) as [Hz | Hz].
+        + cbn [fst snd]; rewrite Hz, tcp_trace_zero.
+          destruct (ev f m2); [ apply Rle_refl | apply Rle_refl ].
+        + rewrite (Himp m1 m2 Hz He); apply Rle_refl.
+    Qed.
+
+    Lemma Pr_ge_of_witness (e f : expr bool) :
+      (forall m1 m2, r' (m1, m2) <> tcp_zero ->
+                     ev f m2 = true -> ev e m1 = true) ->
+      (tsum (fun m2 => if ev f m2 then tcp_trace (rcqs_projR r' m2) else 0%R)
+       <= tsum (fun m1 => if ev e m1
+                          then tcp_trace (rcqs_projL r' m1) else 0%R))%R.
+    Proof.
+      intros Himp.
+      rewrite Pr_sum_pairs_L, Pr_sum_pairs_R.
+      apply tsum_mono.
+      - intros p; destruct (ev f (snd p));
+          [ apply tcp_trace_nonneg | apply Rle_refl ].
+      - apply (summable_mono _ (fun p : cmem * cmem =>
+                                  tcp_trace (r' (fst p, snd p))));
+          [ apply rcqs_pairs_summable; exact Hwf' |].
+        intros p; destruct (ev e (fst p));
+          [ apply Rle_refl | apply tcp_trace_nonneg ].
+      - intros [m1 m2]; cbn [fst snd].
+        destruct (ev f m2) eqn:Hf;
+          [| destruct (ev e m1);
+             [ apply tcp_trace_nonneg | apply Rle_refl ] ].
+        destruct (classic (r' (m1, m2) = tcp_zero)) as [Hz | Hz].
+        + cbn [fst snd]; rewrite Hz, tcp_trace_zero.
+          destruct (ev e m1); apply Rle_refl.
+        + rewrite (Himp m1 m2 Hz Hf); apply Rle_refl.
+    Qed.
+
+  End Elim.
+
+  (** [Cla[idx_1 e ==> idx_2 f]] and [Cla[idx_1 e <=> idx_2 f]]. *)
+  Definition pimpl (e f : expr bool) : pred :=
+    Cla (gmap2 implb (idx SL e) (idx SR f)).
+
+  Definition piff (e f : expr bool) : pred :=
+    Cla (gmap2 Bool.eqb (idx SL e) (idx SR f)).
+
+  Theorem rule_QrhlElim (A : pred) (c d : prog) (e f : expr bool) (rho : rcqs) :
+    rcqs_wf rho -> rcqs_sep rho -> psat rho A ->
+    qrhl A c d (pimpl e f) ->
+    (Pr e c (rcqs_projL rho) <= Pr f d (rcqs_projR rho))%R.
+  Proof.
+    intros Hwf Hsep Hsat H.
+    destruct (H rho Hwf Hsep Hsat) as [r' [Hwf' [_ [Hsat' [HL HR]]]]].
+    assert (Himp : forall m1 m2, r' (m1, m2) <> tcp_zero ->
+                                 ev e m1 = true -> ev f m2 = true).
+    { intros m1 m2 Hnz He.
+      pose proof (proj1 (psat_Cla r' _) Hsat' (m1, m2) Hnz) as Hc.
+      change (ev (gmap2 implb (idx SL e) (idx SR f)) (m1, m2))
+        with (implb (ev e (csel SL ((m1, m2) : rcmem)))
+                    (ev f (csel SR ((m1, m2) : rcmem)))) in Hc.
+      cbn [csel fst snd] in Hc; rewrite He in Hc; exact Hc. }
+    unfold Pr; rewrite <- HL, <- HR.
+    apply (Pr_le_of_witness r' Hwf' e f Himp).
+  Qed.
+
+  (** The equality form, which is what a game-based proof actually uses. *)
+  Theorem rule_QrhlElim_eq (A : pred) (c d : prog) (e f : expr bool)
+          (rho : rcqs) :
+    rcqs_wf rho -> rcqs_sep rho -> psat rho A ->
+    qrhl A c d (piff e f) ->
+    Pr e c (rcqs_projL rho) = Pr f d (rcqs_projR rho).
+  Proof.
+    intros Hwf Hsep Hsat H.
+    destruct (H rho Hwf Hsep Hsat) as [r' [Hwf' [_ [Hsat' [HL HR]]]]].
+    assert (Hiff : forall m1 m2, r' (m1, m2) <> tcp_zero ->
+                                 ev e m1 = ev f m2).
+    { intros m1 m2 Hnz.
+      pose proof (proj1 (psat_Cla r' _) Hsat' (m1, m2) Hnz) as Hc.
+      change (ev (gmap2 Bool.eqb (idx SL e) (idx SR f)) (m1, m2))
+        with (Bool.eqb (ev e (csel SL ((m1, m2) : rcmem)))
+                       (ev f (csel SR ((m1, m2) : rcmem)))) in Hc.
+      cbn [csel fst snd] in Hc.
+      destruct (ev e m1), (ev f m2);
+        solve [ reflexivity | discriminate Hc ]. }
+    unfold Pr; rewrite <- HL, <- HR.
+    apply Rle_antisym.
+    - apply (Pr_le_of_witness r' Hwf' e f).
+      intros m1 m2 Hnz He; rewrite <- (Hiff m1 m2 Hnz); exact He.
+    - (* the mirror image: swap the roles of the two sides *)
+      apply (Pr_ge_of_witness r' Hwf' e f).
+      intros m1 m2 Hnz Hf; rewrite (Hiff m1 m2 Hnz); exact Hf.
   Qed.
 
   (* ================================================================= *)

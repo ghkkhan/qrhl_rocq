@@ -145,6 +145,28 @@ Section Sums.
     intros H; exists M; intros r [l [Hnd <-]]; apply H; exact Hnd.
   Qed.
 
+  Lemma lsum_zero (f : I -> R) (l : list I) :
+    (forall i, f i = 0) -> lsum f l = 0.
+  Proof.
+    intros H; induction l as [| i t IH]; simpl;
+      [ reflexivity | rewrite H, IH; lra ].
+  Qed.
+
+  Lemma summable_zero (f : I -> R) : (forall i, f i = 0) -> summable f.
+  Proof.
+    intros H; apply summable_bounded with (M := 0).
+    intros l _; rewrite (lsum_zero f l H); apply Rle_refl.
+  Qed.
+
+  Lemma tsum_zero (f : I -> R) : (forall i, f i = 0) -> tsum f = 0.
+  Proof.
+    intros H; apply Rle_antisym.
+    - apply tsum_least; [ apply summable_zero; exact H |].
+      intros l _; rewrite (lsum_zero f l H); apply Rle_refl.
+    - apply tsum_nonneg; intros i; rewrite H; apply Rle_refl.
+  Qed.
+
+
   (** ** Point masses
 
       Needed for the semantics of assignment, which maps [delta_m] to
