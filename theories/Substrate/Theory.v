@@ -608,6 +608,22 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply (proj1 (hmem_hpreim _ _ A U u)), H, Hu.
   Qed.
 
+  (** For a unitary [A], the image of [S] is exactly the preimage of [S]
+      under [A]'s adjoint -- a bijective isometry's image is already a
+      closed subspace, so [himg]'s [hspan] adds nothing. This is what makes
+      membership in an image of a *unitary* tractable: [hmem u (himg A S)]
+      reduces to [hmem (oapp (oadj A) u) S], no witness vector to name. *)
+  Lemma himg_unitary {X Y} (A : op X Y) (S : hspace X) :
+    ounitary A -> himg A S = hpreim (oadj A) S.
+  Proof.
+    intros [H1 H2]; apply hle_antisym.
+    - apply himg_le; intros v Hv; apply hmem_hpreim.
+      rewrite <- oapp_ocomp, H1, oapp_oid; exact Hv.
+    - intros u Hu; rewrite hmem_hpreim in Hu.
+      rewrite <- (oapp_oid _ u), <- H2, oapp_ocomp.
+      apply hmem_himg; exact Hu.
+  Qed.
+
   Lemma himg_ocomp_le {X Y Z} (A : op Y Z) (B : op X Y) (S : hspace X) :
     himg A (himg B S) <=h himg (ocomp A B) S.
   Proof.
@@ -745,6 +761,14 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply htensor_le; intros a b Ha Hb.
     apply hmem_hbot in Ha; subst a.
     apply hmem_hbot, tensorv_vzero_l.
+  Qed.
+
+  Lemma htensor_hbot_r {X Y} (S : hspace X) : htensor S (@hbot Y) = hbot.
+  Proof.
+    apply hle_antisym; [| apply hbot_le ].
+    apply htensor_le; intros a b Ha Hb.
+    apply hmem_hbot in Hb; subst b.
+    apply hmem_hbot, tensorv_vzero_r.
   Qed.
 
   Lemma htensor_top {X Y} : htensor (@htop X) (@htop Y) = htop.

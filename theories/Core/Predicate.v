@@ -432,13 +432,19 @@ Module PredTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     intros H w Hw; apply hmem_hdivReg; apply H; apply hmem_hdivReg; exact Hw.
   Qed.
 
-  (** The precondition shape of rule QInit1: [(A / e') (x) l2[Q']]. *)
+  (** The precondition shape of rule QInit1: [(A / e') (x) l2[Q']]. Built
+      from [rUsplit P] directly (via [rhlift_r], which puts the [htop] on
+      [P] itself and the constrained subspace on the complement) rather than
+      [rhlift (rqneg P)] (which would need [Wsplit (rqneg P)], introducing
+      [rqneg]'s double negation on its second factor for no reason -- [P] is
+      exactly the register whose coherence with the side split
+      (`Registers.v`'s `rUsplit_qidx_SL`) is already available. *)
   Definition pdiv (P : rqset) (A : pred) (e : rexpr (l2 (rqsub P))) : pred :=
     gmap2 (fun (a : hspace rqmem) (v : l2 (rqsub P)) =>
-             rhlift (rqneg P) (hdivReg P a v)) A e.
+             rhlift_r P (hdivReg P a v)) A e.
 
   Lemma ev_pdiv (P : rqset) A e rm :
-    ev (pdiv P A e) rm = rhlift (rqneg P) (hdivReg P (ev A rm) (ev e rm)).
+    ev (pdiv P A e) rm = rhlift_r P (hdivReg P (ev A rm) (ev e rm)).
   Proof. reflexivity. Qed.
 
   (* ================================================================= *)

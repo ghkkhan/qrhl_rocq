@@ -262,6 +262,35 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         [ exact H | apply hle_refl ].
     Qed.
 
+    (** The mirror of [whlift]: a subspace restricting the *complement* of
+        [P], unrestricted on [P] itself -- the paper's [B (x) l2[P]] shape
+        (Definition 20's division uses this orientation, not [whlift]'s).
+        Built from [Wsplit P] directly, not [Wsplit (wneg P)], so it never
+        needs [wneg]'s double negation. *)
+    Definition whlift_r (P : wset) (T : hspace (wsub (wneg P))) : hspace wmem :=
+      himg (Wsplit P) (htensor htop T).
+
+    Lemma whlift_r_htop (P : wset) : whlift_r P htop = htop.
+    Proof.
+      unfold whlift_r; rewrite htensor_top.
+      apply hle_antisym; [ apply hle_htop |].
+      intros v _.
+      rewrite <- (oapp_oid _ v).
+      destruct (Wsplit_unitary P) as [_ Hsurj].
+      rewrite <- Hsurj, oapp_ocomp.
+      apply hmem_himg, hmem_htop.
+    Qed.
+
+    Lemma whlift_r_hbot (P : wset) : whlift_r P hbot = hbot.
+    Proof. unfold whlift_r; rewrite htensor_hbot_r; apply himg_hbot. Qed.
+
+    Lemma whlift_r_mono (P : wset) (T U : hspace (wsub (wneg P))) :
+      hle T U -> hle (whlift_r P T) (whlift_r P U).
+    Proof.
+      intros H; unfold whlift_r; apply himg_mono, htensor_mono;
+        [ apply hle_refl | exact H ].
+    Qed.
+
     Lemma wolift_oid (P : wset) : wolift P oid = oid.
     Proof.
       unfold wolift; rewrite tensoro_oid.
@@ -368,6 +397,7 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   Notation rUsplit := (Wsplit rqvar rqtype).
   Notation rolift  := (wolift rqvar rqtype).
   Notation rhlift  := (whlift rqvar rqtype).
+  Notation rhlift_r := (whlift_r rqvar rqtype).
 
   (** Tag a single-sided set of variables with a side: the paper's [idx_i Y]. *)
   Definition qidx (s : side) (P : qset) : rqset :=
