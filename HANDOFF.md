@@ -5,7 +5,8 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `98bc31f`.
+Last updated at commit `8563c58`. Thirteen of the paper's rules are proved,
+with no admits and no axioms outside the substrate signature.
 
 ---
 
@@ -61,14 +62,16 @@ Substrate/Sanity.v      degeneracy canaries for the signature
 Core/Vars.v             cvar/qvar, cmem/qmem, side, rcmem/rqmem, updates
 Core/Expr.v             generic expression record; expr and rexpr instances
 Core/Registers.v        the memory split, U_vars, A»Q, one-sided lifts
-Core/Syntax.v           prog inductive, wt, fv, loopfree
-Core/Semantics.v        [[c]], Pr, denote_wf_trace, denote_add
+Core/Syntax.v           prog inductive, wt, fv, loopfree (now unused)
+Core/Semantics.v        [[c]], Pr, the While section (telescoping bound),
+                        denote_wf_trace / denote_add / denote_sum, cqs_fam
 Core/Predicate.v        Def 13/14/16/18/20/23, Lem 15/17/24/25
 Core/QEq.v              Def 27 quantum equality, Lem 31
-Core/Judgment.v         Definition 35, Lemma 36 forward
-Rules/General.v         Skip, Conseq, Seq
-Rules/Classical.v       Assign1
-Rules/Quantum.v         QApply1
+Core/Judgment.v         Definition 35, Lemma 36 forward, rbeta,
+                        rcqs_sum / rcqs_fam and the projection normality laws
+Rules/General.v         Skip, Conseq, Seq, Case, QrhlElim (+ equality form)
+Rules/Classical.v       Assign1, Sample1, If1, JointIf, JointWhile
+Rules/Quantum.v         QApply1, Measure1
 ```
 
 Functor chain (each layer `Include`s the previous one's application):
@@ -217,28 +220,44 @@ Judgment.v additionally has the relational counterpart — `rcqs_sum` /
 `cqs_trace ∘ rcqs_projL = rcqs_trace`, and normality of both projections —
 plus `tcp_sep_sum` and the one-sided reindexing `rbeta`.
 
-**Rules** — `Skip` (Lem 54), `Conseq` (Lem 46), `Seq` (Lem 47), `Case`
-(Lem 48, needing only well-typedness), `QrhlElim` and its equality form
-(Lem 50), `Assign1` (Lem 55),
-`Sample1` (Lem 56), `If1` (Lem 58), `JointIf` (Lem 59), `JointWhile` (Lem 61),
-`Measure1` (Lem 62), `QApply1` (Lem 65).
+**Rules** — thirteen of the paper's, with the lemma number each is proved
+from:
+
+| rule | lemma | notes |
+|---|---|---|
+| `Skip` | 54 | |
+| `Conseq` | 46 | = `qrhl_mono` |
+| `Seq` | 47 | plus the two skip corollaries |
+| `Case` | 48 | needs only well-typedness |
+| `QrhlElim` | 50 | plus the equality form; ahead of its phase |
+| `Assign1` | 55 | |
+| `Sample1` | 56 | |
+| `If1` | 58 | |
+| `JointIf` | 59 | |
+| `JointWhile` | 61 | ahead of its phase; no termination condition needed |
+| `Measure1` | 62 | |
+| `QApply1` | 65 | |
+
+`grep -rhoE "Theorem rule_[A-Za-z_0-9]+" theories/Rules/ | sort -u` is the
+authoritative list.
 
 ---
 
 ## 6. The trusted surface
 
-44 parameters, 125 axioms, grouped in `Interface.v` (run `make axioms` for
-the current inventory; the table below is indicative, not maintained):
+Grouped as `Interface.v` groups them; `make axioms` regenerates the full
+inventory in `AXIOMS.md`, which is where the statements live.
 
 | group | params | axioms |
 |---|---|---|
-| Vectors (`l2 X`) | 7 | 15 |
+| Vectors: the space l2(X) | 7 | 15 |
 | Subspaces | 8 | 15 |
 | Bounded operators | 9 | 10 |
-| Preimages | 1 | 1 |
+| Preimages of subspaces | 1 | 1 |
 | Tensor product | 4 | 13 |
-| Reindexing (`Ubij`) | 1 | 3 |
-| Positive trace-class | 14 | 60 |
+| Reindexing | 1 | 3 |
+| Positive trace-class operators | 14 | 68 |
+| **total** | **44** | **125** |
 
 Discipline when adding one: it must be a statement you could cite a textbook
 for; it must be *used* by a proof you are writing now (never speculatively);
@@ -298,28 +317,11 @@ its two-sided analogue, and the two projections each need one marginal of `f`
 over the pair does the marginal. No architectural obstacle; about the size of
 `Sample1`.
 
-### 7c. `QInit1` — and the register-coherence question this forces
+### 7c. `op_ext_ket` — one axiom that unblocks several things at once
 
-**This is the item to raise with the user before doing.** `QInit1` is on the
-critical path to Phase 1's exit criterion (the EPR examples need it), and it
-is blocked on relating two decompositions of the relational memory:
-
-- the side split `rqmem ≅ qmem ⊗ qmem` (via `Urqpair`), followed by the
-  register split `qmem ≅ ℓ²[Q] ⊗ ℓ²[Qᶜ]` (via `Wsplit`), against
-- the relational register split `rqmem ≅ ℓ²[idx₁ Q] ⊗ ℓ²[(idx₁ Q)ᶜ]` (via
-  `Wsplit` on `rqvar`).
-
-Defining one-sided lifts through `Urqpair` sidestepped this for all the rules
-proved so far, but `QInit1` cannot be sidestepped: the operation *discards* a
-register, so its left projection and its separability both need the two
-pictures identified. Lemma 32, `Frame` and `Equal` want the same thing.
-
-Since the last handoff the shape of the fix has become clear, and it is
-cheaper than the earlier note suggested. `Wsplit`, `Urqpair` and the
-reassociation are all `Ubij`s, and `tensoro` of `Ubij`s sends kets to kets, so
-the required unitary identity is an index-level computation — *provided* the
-signature can conclude operator equality from agreement on the computational
-basis:
+**This is the item to decide before doing.** It is now clear that three
+separate outstanding pieces all reduce to the same missing principle, so it is
+worth treating as its own decision rather than as part of any one of them.
 
 ```coq
 Axiom op_ext_ket : forall X Y (A B : op X Y),
@@ -327,23 +329,85 @@ Axiom op_ext_ket : forall X Y (A B : op X Y),
 ```
 
 That is the totality of an orthonormal basis: textbook, generic in `X` and
-`Y`, and mentioning nothing about qRHL — so it passes the hygiene rule as
-stated. The signature already declines to expose the continuity that would let
-it be derived (see the comment on `Ubij_unitary`), which is exactly why it has
-to be assumed rather than proved.
+`Y`, and mentioning nothing about qRHL, so it passes the hygiene rule of §1 as
+stated. The signature deliberately declines to expose the continuity that
+would let it be *derived* — see the comment on `Ubij_unitary` — which is
+exactly why it has to be assumed. Note what it buys: every unitary in the
+development (`Wsplit`, `Urqpair`, the reassociations, the side swap) is a
+`Ubij` or a `tensoro` of `Ubij`s, and those send kets to kets, so any identity
+between composites of them becomes an index-level computation.
 
-What it costs afterwards is *not* small: the reassociation unitary has to be
-built as a `Ubij` between `rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and
-`(qsub P × qsub Pᶜ) × qmem`, and its two round-trip proofs are dependent
-function equalities over `fun w => if P w then wty w else unit`. Expect this
-to be the most painful Rocq in the development. The alternative — an abstract
-register primitive in the style of Unruh's *Registers* or CoqQ's `qreg` — is a
-larger redesign but replaces the pain with a clean interface.
+What it unblocks:
 
-**Recommendation: add `op_ext_ket` and derive the coherence theorem**, since
-it keeps the hygiene line where it is. But confirm before starting.
+- **Register coherence**, and with it `QInit1` (§7d), Lemma 32 and the
+  locality that `Frame`/`Equal` need.
+- **`Sym`** (§7e).
 
-### 7d. `JointMeasureSimple` (Lem 64)
+**Recommendation: add it.** The alternative for register coherence — an
+abstract register primitive in the style of Unruh's *Registers* or CoqQ's
+`qreg` — is a larger redesign, and the alternative for `Sym` is an ad-hoc
+axiom that *would* move the hygiene line. But confirm before starting, since
+it is the first addition to the trusted surface that is a general principle
+rather than a specific fact.
+
+### 7d. `QInit1`, and register coherence
+
+`QInit1` is on the critical path to Phase 1's exit criterion (the EPR examples
+need it), and it is blocked on relating two decompositions of the relational
+memory:
+
+- the side split `rqmem ≅ qmem ⊗ qmem` (via `Urqpair`), followed by the
+  register split `qmem ≅ ℓ²[Q] ⊗ ℓ²[Qᶜ]` (via `Wsplit`), against
+- the relational register split `rqmem ≅ ℓ²[idx₁ Q] ⊗ ℓ²[(idx₁ Q)ᶜ]` (via
+  `Wsplit` on `rqvar`).
+
+Defining one-sided lifts through `Urqpair` sidestepped this for every rule
+proved so far, but `QInit1` cannot sidestep it: the operation *discards* a
+register, so both its left projection and its separability need the two
+pictures identified.
+
+With `op_ext_ket` the coherence theorem is an index-level computation. What is
+*not* cheap afterwards: the reassociation unitary has to be built as a `Ubij`
+between `rqsub (idx₁ P) × rqsub ((idx₁ P)ᶜ)` and `(qsub P × qsub Pᶜ) × qmem`,
+and its two round-trip proofs are dependent function equalities over
+`fun w => if P w then wty w else unit`. Expect the most painful Rocq in the
+development.
+
+### 7e. `Sym` (Lem 44)
+
+Scoped but not started. `{A} c ∼ d {B}` gives `{swap A} d ∼ c {swap B}`, which
+would halve the work for every "2" variant (`Assign2`, `Sample2`, `QApply2`,
+`Measure2`, `If2`, …) — currently those have to be proved directly, as
+`QApply2_pre` in `Rules/Quantum.v` hints.
+
+The state-level pieces exist: `swap`, `rcmem_swap`, `rqmem_swap` and their
+involution lemmas are in `Core/Vars.v`. What is missing is three things.
+
+1. `Urqswap := Ubij rqmem_swap rqmem_swap _ _ : op rqmem rqmem` — trivial to
+   define, not yet defined.
+2. That swapping exchanges the two partial traces:
+   `rtcpL (tcp_conj Urqswap ρ) = rtcpR ρ`. This factors as
+   `ocomp Urqpair Urqswap = ocomp oswap Urqpair` (a ket identity, so
+   `op_ext_ket`), followed by `tcp_ptrace ∘ tcp_conj oswap = tcp_ptrace2`.
+   The second is **not** derivable — §8 records why — so it needs one axiom,
+   stated without a new parameter as
+   ```coq
+   Axiom tcp_ptrace_Ubij_swap : forall X Y H1 H2 (r : tcp (X * Y)),
+     tcp_ptrace (tcp_conj (@Ubij (X * Y) (Y * X)
+                            (fun p => (snd p, fst p))
+                            (fun q => (snd q, fst q)) H1 H2) r)
+     = tcp_ptrace2 r.
+   ```
+   The mirror law then follows, given `op_ext_ket`, from `oswap ∘ oswap = oid`.
+3. **The open question:** how to swap a *predicate*. A `pred` is a
+   `gexpr rcvar rcmem rctype rcget (hspace rqmem)`, a record carrying `ev`, an
+   over-approximate free-variable set `efv`, and a locality proof relating
+   them. Precomposing `ev` with `rcmem_swap` and postcomposing with
+   `himg Urqswap` is easy; producing the `ev_local` obligation for the swapped
+   free-variable set `fun v => efv A (swap (fst v), snd v)` is the part to
+   think about. Settle this before writing any of `Sym`.
+
+### 7f. `JointMeasureSimple` (Lem 64)
 
 `Measure1`'s pattern applied on both sides at once, plus the quantum equality
 `Q′₁ ≡quant Q′₂` in the precondition. Notably it does *not* require the
@@ -352,18 +416,18 @@ measurements to be total (the paper says so explicitly, p. 32), so
 sides' measurements cancel against each other through the quantum equality
 instead.
 
-### 7e. §4.4's two remaining lemmas
+### 7g. §4.4's two remaining lemmas
 
 - **Lemma 29 / Corollary 30** needs the Schmidt decomposition (paper Lemma 7)
   as a new axiom. The *converse* direction — the one the examples use, to
   *establish* a quantum equality — is six lines and needs only that `U₁`, `U₂`
   are isometries. Do that first.
-- **Lemma 32** is the register-coherence statement of 7c; it falls out of the
+- **Lemma 32** is the register-coherence statement of 7d; it falls out of the
   same work.
 
-### 7f. Then Phase 1e onward
+### 7h. Then Phase 1e onward
 
-Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on 7c),
+Ltac2 tactics and the EPR examples (Phase 1's exit criterion, gated on 7d),
 Phase 2's remaining structural rules (`Sym`, `Frame`, `Equal`, `QrhlElimEq`)
 and `While1` (`JointWhile` is done; `While1` is the harder one, needing
 Definition 22's totality and a locality condition), Phase 3's `Trans`/`Adversary`/ROR-OT-CPA, and Phase 4's
@@ -419,7 +483,27 @@ Recorded so they are not re-derived.
 
 ---
 
-## 9. Working practices
+## 9. Commit log, most recent first
+
+Each commit message explains *why*; this is just the map.
+
+| commit | what |
+|---|---|
+| `8563c58` | `JointWhile` (Lem 61) |
+| `f343d18` | the three `denote` inductions now cover loops; `loopfree` retired |
+| `3c22b94` | docs refresh; the register-coherence write-up |
+| `98bc31f` | `QrhlElim` and its equality form (Lem 50) |
+| `1287c9a` | `denote_sum` (normality) and `Case` (Lem 48) |
+| `edfb058` | `Measure1` (Lem 62) |
+| `6734743` | `Sample1` (Lem 56) |
+| `530a960` | `If1` and `JointIf`, with no new axioms |
+| `eca6235` | this file, first version |
+| `c588539` | README: what each remaining Phase 1d rule needs |
+| `506d4d3` | `[[c]]` is additive on the positive cone |
+
+---
+
+## 10. Working practices
 
 - Commit messages: explain *why*, name the paper lemma numbers, record
   surprises. End with the `Co-Authored-By` line the session's attribution
