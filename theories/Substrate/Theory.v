@@ -419,6 +419,17 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     ocomp A (ocomp B C) = ocomp (ocomp A B) C.
   Proof. apply op_ext; intros v; rewrite !oapp_ocomp; reflexivity. Qed.
 
+  (** The plain-product associator, needed to reassociate a tensor factor
+      that has itself been split (e.g. [QInit1]'s discard-and-replace acting
+      on one register of one side of a pair). No dependent typing at all --
+      unlike the register-level reassociations, a plain product's associator
+      is generic and its round trips are one-liners. *)
+  Definition Uprodassoc {A B C : Type} : op ((A * B) * C) (A * (B * C)) :=
+    Ubij (fun p => (fst (fst p), (snd (fst p), snd p)))
+         (fun p => ((fst p, fst (snd p)), snd (snd p)))
+         (ltac:(intros [[a b] c]; reflexivity))
+         (ltac:(intros [a [b c]]; reflexivity)).
+
   Lemma ocomp_oid_l {X Y} (A : op X Y) : ocomp oid A = A.
   Proof. apply op_ext; intros v; rewrite oapp_ocomp, oapp_oid; reflexivity. Qed.
 
@@ -523,6 +534,9 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   (** Reindexing unitaries really are unitary, repackaged into the predicate. *)
   Lemma Ubij_ounitary {X Y} f g H1 H2 : ounitary (@Ubij X Y f g H1 H2).
   Proof. apply Ubij_unitary. Qed.
+
+  Lemma Uprodassoc_unitary {A B C : Type} : ounitary (@Uprodassoc A B C).
+  Proof. apply Ubij_ounitary. Qed.
 
   (** The identity reindexing is [oid], and composing two [Ubij]s along
       composable index maps is the [Ubij] of the composite -- both index-level
