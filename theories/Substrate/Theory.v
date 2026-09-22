@@ -1163,6 +1163,46 @@ Module HTheory (S : HILBERT_SUBSTRATE).
     apply tcp_tensor_sum_l, H1.
   Qed.
 
+  (** The support of a tensor product is contained in the tensor of the
+      supports -- via [tcp_decompose] on each factor plus [tcp_tensor_sum_sum],
+      not a new axiom. (The reverse inclusion, and hence the full equality
+      "[tcp_supp (tcp_tensor r s) = htensor (tcp_supp r) (tcp_supp s)]", is a
+      different, stronger claim that this proof does not need and does not
+      give: this is genuinely a one-directional fact.) *)
+  Lemma tcp_supp_tensor_le {X Y} (r : tcp X) (s : tcp Y) :
+    tcp_supp (tcp_tensor r s) <=h htensor (tcp_supp r) (tcp_supp s).
+  Proof.
+    destruct (tcp_decompose X r) as [J [u [HuJ Hru]]].
+    destruct (tcp_decompose Y s) as [K [b [HbK Hsb]]].
+    assert (Hsupr : tcp_supp r = hSup (fun j => hspan1 (u j))).
+    { rewrite Hru, (tcp_supp_sum _ _ _ HuJ).
+      f_equal; apply funext; intros j; apply tcp_supp_proj. }
+    assert (Hsups : tcp_supp s = hSup (fun k => hspan1 (b k))).
+    { rewrite Hsb, (tcp_supp_sum _ _ _ HbK).
+      f_equal; apply funext; intros k; apply tcp_supp_proj. }
+    destruct (tcp_tensor_sum_sum (fun j => tcp_proj (u j)) (fun k => tcp_proj (b k)) HuJ HbK)
+      as [Hsig Heqsig].
+    intros v Hv.
+    rewrite Hru, Hsb, Heqsig in Hv.
+    assert (Heqf : (fun p : sigT (fun _ : J => K) =>
+                      tcp_tensor (tcp_proj (u (projT1 p))) (tcp_proj (b (projT2 p))))
+                   = (fun p : sigT (fun _ : J => K) => tcp_proj (tensorv (u (projT1 p)) (b (projT2 p))))).
+    { apply funext; intros p; apply tcp_tensor_proj. }
+    rewrite Heqf in Hv.
+    assert (Hsig' : tcp_summable
+      (fun p : sigT (fun _ : J => K) => tcp_proj (tensorv (u (projT1 p)) (b (projT2 p))))).
+    { rewrite <- Heqf; exact Hsig. }
+    rewrite (tcp_supp_sum _ _ _ Hsig') in Hv.
+    revert v Hv; apply hSup_least; intros p v Hv.
+    rewrite tcp_supp_proj in Hv.
+    assert (Hincl : hspan1 (tensorv (u (projT1 p)) (b (projT2 p)))
+                    <=h htensor (tcp_supp r) (tcp_supp s)).
+    { apply hspan1_le, hmem_htensor.
+      - rewrite Hsupr; eapply hSup_ub; apply hmem_hspan1.
+      - rewrite Hsups; eapply hSup_ub; apply hmem_hspan1. }
+    apply Hincl, Hv.
+  Qed.
+
   Lemma tcp_summable_singleton {X J} (F : J -> tcp X) (j0 : J) :
     (forall j, j <> j0 -> F j = tcp_zero) -> tcp_summable F.
   Proof.
