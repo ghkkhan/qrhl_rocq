@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `aa0ea8e`. Seventeen of the paper's rules are proved,
+Last updated at commit `8301fb5`. Seventeen of the paper's rules are proved,
 Lemma 36 is proved in both directions, and there are no admits and no axioms
 outside the substrate signature (which now includes a countable coherent
 vector sum and the Schmidt decomposition -- see §6/§7f).
