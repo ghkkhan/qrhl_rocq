@@ -375,26 +375,30 @@ Sections are numbered `7a`..`7g` in the order they were tackled historically,
 not in blocked-by order; read this map first, then jump to the section that
 matches what you're picking up.
 
-**The very next step is a decision, not a proof: which (if either) new
-substrate axiom to add to finish `QInit1`.** Full detail is at the end of
-§7d, but in short: `QInit1`'s witness (well-formedness, separability, both
-projections) is landed unconditionally, and everything else about the rule
-is ordinary, already-understood proof work. The one remaining piece,
-`psat`, was checked two independent ways and **both genuinely need a new
-axiom** -- this is not a case of "look harder and it'll reduce," it was
-worked all the way through. The two live candidate shapes (widen the
-Schmidt/`vsum` boundary again, as `tcp_ptrace2_schmidt`; or a
-`tcp_ptrace2`/`tcp_supp` Galois-connection duality, `tcp_supp_ptrace2`) are
-written out at the end of §7d, along with why a third candidate
-(`tcp_supp_tensor`) that looked promising turned out to be free (landed,
-no axiom) but insufficient by itself. Neither remaining candidate has had a
-counterexample check or a settled `advisor` review yet -- that's the actual
-next action, not further proof attempts. Once one is picked and lands (with
-a `Sanity.v` canary, per this project's standing practice), finishing
-`rule_QInit1` itself is mechanical: discharge `psat` with it, write the
-small `pred`-wrapper noted at the end of §7d, and assemble via
-`qrhl_pure_to_qrhl` (already proved, §7a) the same way every other one-sided
-rule in `Rules/Quantum.v` does.
+**The very next step is a decision, not a proof: whether to add two new
+substrate axioms together to finish `QInit1`, or leave it open.** Full
+detail is at the end of §7d, but in short: `QInit1`'s witness
+(well-formedness, separability, both projections) is landed unconditionally,
+and everything else about the rule is ordinary, already-understood proof
+work. The one remaining piece, `psat`, was checked three independent ways,
+worked all the way through each time (not assumed to reduce), and the
+finding sharpened as each was checked: a promising-looking candidate
+(`tcp_supp_tensor`) turned out derivable for free (landed, no axiom, no
+decision needed there); a second (`tcp_supp_ptrace2`, `advisor`-recommended
+on structural-fit grounds) was rejected on a verified check -- it needs an
+`hspan`-extraction step first that isn't available; and the third
+(widening the Schmidt/`vsum` boundary again) is viable but needs **two**
+axioms together, not one -- a mirror-orientation gap in the existing
+`hmem_tensor_span_component` that isn't derivable from what's landed. Both
+candidate statements are written out together (they are a package) at the
+end of §7d. **This is a real scope change from "one more axiom" to "two,"
+and it is the user's call, not a call to make solo.** If the answer is yes,
+landing them (each with a `Sanity.v` canary, per standing practice) makes
+finishing `rule_QInit1` itself mechanical: discharge `psat`, write the small
+`pred`-wrapper noted at the end of §7d, and assemble via `qrhl_pure_to_qrhl`
+(already proved, §7a) the same way every other one-sided rule in
+`Rules/Quantum.v` does. If the answer is no, `QInit1` stays open and §7e/§7f
+are the next fronts.
 
 **Independently of that decision**, two other fronts are open and don't
 depend on it:
@@ -584,33 +588,67 @@ not repeating):** register coherence is solved (`rUsplit_qidx_SL`); the
 precondition is reformulated to avoid a second `Uassoc` wall (`qinit_pre`);
 the witness's well-formedness, separability, and both projections are proved
 unconditionally (`QInit1_witness_wf_sep_proj`). The **only** open piece is
-`psat`, and it needs a new substrate axiom — confirmed by working two
-independent routes all the way through, not assumed. The candidates, neither
-yet reviewed or counterexample-checked:
+`psat`. **It needs two new substrate axioms, not one** — this was checked
+by working three routes all the way through (not assumed), and the
+three-routes-to-two-axioms shape is itself the finding worth reading
+carefully before deciding anything:
+
+- **Route C** (`tcp_supp_ptrace2`, a `tcp_ptrace2`/`tcp_supp` Galois duality)
+  was researched, `advisor`-recommended over Route A on structural-fit
+  grounds, and then **rejected on a verified check**: applying it needs
+  `hmem Y (htensor htop T)` from the precondition hypothesis first, and that
+  step itself needs to extract a fact from an `hspan` membership — exactly
+  the kind of extraction `hmem_tensor_span_component` exists as a *separate
+  axiom* because it is not otherwise derivable. Landing Route C would have
+  widened the trusted surface for a proof that still doesn't close. Do not
+  re-propose it without a different way to close that step.
+- **Route A** (`tcp_ptrace2_schmidt`) is viable for the step it covers, but
+  **insufficient alone**: it lets a Schmidt decomposition of `Y` (`v`'s split
+  across the `Usplit P` boundary) stand in for `qinit_tcp`'s output family,
+  but extracting the *specific* Schmidt factor `psat` needs (`Y`'s `qsub
+  (qneg P)`-side factor, given the `qsub P`-side is unconstrained) is the
+  **mirror** of `hmem_tensor_span_component` — which extracts the *first*
+  tensor factor given the *second* unconstrained, the opposite of what's
+  needed here. That orientation is forced by `Wsplit`'s own `qsub P * qsub
+  (qneg P)` ordering (predates this work, not something to flip). The mirror
+  is not derivable from the original `hmem_tensor_span_component`: relating
+  the two needs `oapp Uswap (vsum F) = vsum (fun j => oapp Uswap (F j))`,
+  and `vsum` has no such law (same write-only boundary as always). So Route
+  A needs a **second** axiom alongside it:
 
 ```coq
-(* Route A: widen the Schmidt/vsum boundary again *)
+(* Route A, part 1: widen the Schmidt/vsum boundary again *)
 Axiom tcp_ptrace2_schmidt : forall X Y I (lam : I -> R) (a : I -> l2 X) (b : I -> l2 Y),
     (forall i, (0 < lam i)%R) -> (* + orthonormality of a, b, as in schmidt_decompose *)
     vsummable (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))) ->
     tcp_ptrace2 (tcp_proj (vsum (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i)))))
     = tcp_sum (fun i => tcp_scale (lam i * lam i) (tcp_proj (b i))).
 
-(* Route C: a tcp_ptrace2/tcp_supp Galois-connection duality *)
-Axiom tcp_supp_ptrace2 : forall X Y (r : tcp (X * Y)) (T : hspace Y),
-    tcp_supp (tcp_ptrace2 r) <=h T <-> tcp_supp r <=h htensor htop T.
+(* Route A, part 2: the mirror of hmem_tensor_span_component -- same fact,
+   second factor extracted instead of first, first factor unconstrained
+   instead of second. Needed alongside part 1, not instead of it. *)
+Axiom hmem_tensor_span_component_r : forall X Y J (a : J -> l2 X) (W : hspace Y)
+    (b : J -> l2 Y) (j0 : J),
+    vsummable (fun j => tensorv (a j) (b j)) ->
+    (forall i j, i <> j -> inner (a i) (a j) = C0) ->
+    (forall j, a j <> vzero) ->
+    hmem (vsum (fun j => tensorv (a j) (b j)))
+         (hspan (fun u => exists x y, hmem x htop /\ hmem y W /\ u = tensorv x y)) ->
+    hmem (b j0) W.
 ```
 
-Both are mathematically the same fact (the support/reduced-density-matrix of
-a Schmidt-decomposed state), stated at different levels; landing either one
-should close `psat`, and the choice is about which is a better-shaped
-addition to this trusted surface, not about correctness. **This is the very
-next action item for this project** — see §7 above for how to proceed once
-it's decided. The full paragraph-by-paragraph history below records: the
-witness redesign that led here, the reverted `Uprodassoc`/associator detour,
-the precondition reformulation, and the two failed/one free result from
-trying to close `psat` (`tcp_supp_tensor` turned out derivable for free —
-`tcp_supp_tensor_le`, landed — but insufficient alone).
+**So the actual decision is not "which one axiom" — it is "add these two
+axioms together to finish `QInit1`, or leave `QInit1` open and move to
+§7e/§7f instead."** Both routes widen the same `vsum`/coherent-sum boundary
+§6 already widened once; neither is a smaller or cleaner alternative to the
+other, they are a package. This is a real scope change from "one more
+axiom," and it is the user's call, not a call to make solo — see §7 above.
+The full paragraph-by-paragraph history below records: the witness redesign
+that led here, the reverted `Uprodassoc`/associator detour, the
+precondition reformulation, and the full trail of routes tried for `psat`
+(`tcp_supp_tensor` turned out derivable for free — `tcp_supp_tensor_le`,
+landed — but insufficient alone; Route C likewise insufficient alone; Route
+A insufficient *alone* despite being the closest of the three).
 
 **Update: the assessment below (register coherence needs one monolithic
 dependent `Ubij`, "likely the most painful Rocq in the development") was
@@ -901,15 +939,20 @@ mirroring `hdivL`'s own vector-level duality with `tensorv` — arguably more
 general and more textbook-clean than either original candidate, but not yet
 checked against a counterexample or by `advisor`.)
 
-**Status: still blocked, and honestly so.** `advisor` became unavailable
-mid-verification (this second finding has had no second opinion), so no
-axiom has been added and none should be without one — this project's
-practice throughout has been: no substrate addition without scrutiny
-(`advisor` review, ideally a counterexample check, as `vsum`/
-`schmidt_decompose` got in §6). The decision is the user's: retry `advisor`
-when it's back, or decide directly whether to widen the `vsum` boundary
-(as `tcp_ptrace2_schmidt` or `tcp_supp_ptrace2`, whichever shape reviews
-better) to finish `QInit1`.
+**Status at the time: still blocked, and honestly so.** `advisor` became
+unavailable mid-verification (this second finding had no second opinion at
+that point), so no axiom was added.
+
+**Resolved once `advisor` came back** (see the "Current status" block at
+the top of this section for the full, current account): `advisor`
+recommended Route C (`tcp_supp_ptrace2`) over Route A on structural-fit
+grounds, then agreed it should be *rejected* once a concrete check (asked
+for by `advisor`, carried out and verified twice from different angles)
+showed the pre-axiom step needs an `hspan`-extraction fact that isn't
+available. Route A turned out viable but needing a **second**, mirror-shaped
+axiom alongside it (`hmem_tensor_span_component_r`) — a genuine "this rule
+needs two axioms" finding, not resolved unilaterally and put in front of the
+user instead. Nothing has been added to `Interface.v` as of this update.
 
 `rUsplit_qidx_SL` (above) remains the bridge lemma that would eventually
 show the reformulated `qinit_pre` is equivalent to the paper's `pdiv`-based
@@ -1059,6 +1102,28 @@ and Phase 4's finite-dimensional model — which is the only thing that turns
 
 Recorded so they are not re-derived.
 
+- **A `Ubij`'s action on a general (non-ket) vector is computable when that
+  vector is itself a clean tensor product, via a chained `op_ext_ket`
+  extension — this generalizes further than it looks at first.** The
+  standing assumption in this project has been "a `Ubij` only gives you its
+  action on kets, full stop" — true for a genuinely opaque/entangled
+  argument, but **not** true when the argument is `tensorv a b` (or
+  `tensorv (tensorv a b) c`) for *fully general* `a`, `b`, `c` (not
+  themselves kets). The technique: fix all but one variable as a ket, prove
+  the identity by `op_ext_ket` (checking the remaining variable's kets);
+  this gives the identity for *all* values of that one variable, including
+  general (non-ket) ones; then fix that variable at a general value and
+  repeat for the next. Two rounds of this gave `oapp Uprodassoc
+  (tensorv (tensorv a b) c) = tensorv a (tensorv b c)` for fully general
+  `a b c`; one round gives `oapp Uswap (tensorv a b) = tensorv b a` for
+  fully general `a b`. Both are sound and were derived in this session, but
+  neither rescues the proof they were tried for (`QInit1`'s `psat`) — in
+  both cases what actually fails is a *different* step, pushing an operator
+  through a `vsum` (coherent sum), which this technique does not reach and
+  which has no general law (`vsum` is write-only; see §7d, §6). Know the
+  technique works, and know precisely where its reach ends, before assuming
+  either that a `Ubij` is always stuck on general vectors, or that this
+  trick gets you all the way to a `vsum`.
 - **`Assign1`'s guard is not satisfied at a single old value.** If `e` is
   constant it holds for *every* one. What is true is that (target, old value)
   is in bijection with (source, the target's old `x`), and *under that
