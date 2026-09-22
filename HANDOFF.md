@@ -397,33 +397,45 @@ landing them (each with a `Sanity.v` canary, per standing practice) makes
 finishing `rule_QInit1` itself mechanical: discharge `psat`, write the small
 `pred`-wrapper noted at the end of §7d, and assemble via `qrhl_pure_to_qrhl`
 (already proved, §7a) the same way every other one-sided rule in
-`Rules/Quantum.v` does. If the answer is no, `QInit1` stays open and §7e/§7f
-are the next fronts.
+`Rules/Quantum.v` does. If the answer is no, `QInit1` stays open — and, as
+of the correction below, that does *not* leave §7e/§7f as a ready
+alternative front the way an earlier version of this section claimed.
 
-**Independently of that decision**, two other fronts are open and don't
-depend on it:
-- **§7f**: the substrate capability (Schmidt/`vsum`) is landed; Lemma 29's
-  *forward* direction is ordinary proof work with one genuinely unscoped
-  step (the paper's operator-norm/eigenvector argument -- read that
-  paragraph before starting, it may need its own auxiliary facts). Lemma
-  29's *converse* and Lemma 32 are both blocked on a register-coherence
-  layer (`rWsplit2` vs. `Urqpair`/individual splits) comparable in size to
-  `rUsplit_qidx_SL` (§7d) -- not started.
-- **§7e**: `JointMeasureSimple` is untouched. It looks, on the surface,
-  like it should port `JointSample`'s two-layer-projection technique
-  directly, but it also has to reason about how the quantum-equality
-  precondition interacts with measurement, which is new content this
-  project hasn't derived yet -- treat the scope as uncertain until that
-  interaction is actually worked out, not as a known quantity.
+**Correction: §7e/§7f are not actually independent of each other, and
+neither is close to unblocked.** Checked directly against the paper's proof
+text (`qRHL.pdf`, not recalled from memory): Lemma 29 needs the
+`rWsplit2`/`Urqpair` combined-register coherence layer in **both**
+directions, not just the converse as this file and `QEq.v` previously (and
+wrongly) said twice. The forward direction's own proof regroups
+`(ψ1^Q⊗ψ1^Y)⊗(ψ2^Q⊗ψ2^Y)` into `ψ1^Q⊗ψ2^Q⊗ψ1^Y⊗ψ2^Y`, which the paper waves
+through as "the tensor product is commutative in our formalism" — in this
+encoding that regrouping *is* the coherence layer. The forward direction
+also independently needs an operator-norm/spectral fact (`P2 x = x` for a
+positive, norm-≤1 operator) that this signature has **no machinery for at
+all** — no operator norm, no spectral theorem for a general bounded
+operator (`opositive` has zero derived lemmas anywhere in the codebase).
+Lemma 32 needs the same coherence layer. `JointMeasureSimple` (§7e) hasn't
+been checked this carefully yet, but it uses the quantum-equality
+precondition directly, so it should be assumed to need at least the
+coherence layer too until shown otherwise.
 
-Both of those carry real, not-yet-derived mathematical content (an
-operator-norm argument; a register-coherence layer; a qeq/measurement
-interaction). This session's own experience is that this kind of proof
-benefits substantially from `advisor` review before and during -- it
-caught a wrong witness design, a false extraction lemma, and a wrong
-"no axiom needed" turn, each of which would otherwise have cost a great
-deal of wasted effort. Scope carefully and consult before committing to an
-approach, the same way §7d itself was worked.
+**So there is exactly one clearly-scoped, unblocked front left on the
+board: building the `rWsplit2`/`Urqpair` register-coherence layer itself.**
+It sits behind Lemma 29 (both directions), Lemma 32, and probably §7e. It
+also has a proven playbook: `rUsplit_qidx_SL` (§7d) solved the structurally
+identical problem for a single register (destruct the side tag concretely
+so types reduce by computation alone, prove the operator identity on kets,
+lift by `op_ext_ket`) — a much better-characterized risk than guessing at
+a new axiom for the operator-norm gap. Whoever picks this up next should
+most likely start there, not with Lemma 29's forward direction directly.
+
+Both this and §7d's axiom decision carry real, not-yet-derived content.
+This session's own experience is that this kind of work benefits
+substantially from `advisor` review before and during — it caught a wrong
+witness design, a false extraction lemma, a wrong "no axiom needed" turn,
+and (twice) a wrong forward/converse independence claim that only a check
+against the paper's actual text caught. Scope carefully and consult before
+committing to an approach, the same way §7d itself was worked.
 
 ### 7a. Lemma 36's converse — DONE
 
@@ -985,13 +997,22 @@ technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 ### 7f. §4.4's two remaining lemmas — the substrate capability is landed; the lemmas are not
 
 **Current status (read this first, rest is chronological trail):** the
-Schmidt/`vsum` substrate capability this needed is landed (§6). Lemma 29's
-*forward* direction is open, ordinary proof work, with one unscoped step
-flagged near the bottom of this section (the operator-norm/eigenvector
-argument). Lemma 29's *converse* and Lemma 32 are both open, blocked on an
-`rWsplit2`/`Urqpair` register-coherence layer, not yet built. None of this
-section is blocked on §7d's open axiom decision, and vice versa — the two
-fronts are independent; see §7's top-level map for the full picture.
+Schmidt/`vsum` substrate capability this needed is landed (§6). **Corrected
+update: checked against the paper's actual proof text (`qRHL.pdf`), not
+recalled from memory, and both directions of Lemma 29 turn out to need the
+same `rWsplit2`/`Urqpair` register-coherence layer — the forward/converse
+split this section and `QEq.v` stated twice is wrong.** The paper's forward
+proof regroups `(ψ1^Q⊗ψ1^Y)⊗(ψ2^Q⊗ψ2^Y)` into `ψ1^Q⊗ψ2^Q⊗ψ1^Y⊗ψ2^Y`, waved
+through with "the tensor product is commutative in our formalism" — in this
+encoding that regrouping *is* the combined-register coherence layer, not a
+free step. **The forward direction also independently needs an operator-
+norm/spectral fact this signature has no machinery for at all** (see below)
+— not "may need," confirmed by checking exactly where the algebraic route
+breaks. So there is no part of Lemma 29 that is currently unblocked;
+`rWsplit2`/`Urqpair` coherence is the single shared bottleneck for Lemma
+29 (both directions), Lemma 32, and very likely §7e's quantum-equality
+content too. See §7's top-level map — the "independent front" framing
+there is superseded by this finding.
 
 **Update: both estimates in this section (from before this session, and
 repeated in `QEq.v`'s "Not yet here" comment) turned out to be wrong, in a
@@ -1061,16 +1082,32 @@ account of what was added and why each piece is shaped the way it is. That
 was the substrate-capability question; it is resolved. **What is still
 open, and is ordinary proof work rather than a design question**:
 
-- Lemma 29's forward direction (apply `schmidt_decompose` to `psi1`, `psi2`;
-  use `hmem_tensor_span_component` to extract the `Q`-parts; the
-  eigenvector/operator-norm argument for showing `alpha` has modulus 1 and
-  `P2(Û1 psi1Q) = Û1 psi1Q` is the one piece of the paper's page-long proof
-  that doesn't obviously reduce to something already in the file -- worth
-  scoping carefully before starting, it may need its own auxiliary facts
-  about `oisometry`/operator norms).
-- Lemma 29's converse direction and Lemma 32, both blocked on the
-  `rWsplit2`/`Urqpair` coherence layer described above (comparable in size
-  to `rUsplit_qidx_SL`, not yet built).
+- **Update, corrected (checked against the paper's own proof text, not
+  recalled): this bullet list is wrong as originally written and is kept
+  only as a record of that.** Both directions of Lemma 29, not just the
+  converse, are blocked on the `rWsplit2`/`Urqpair` combined-register
+  coherence layer (comparable in size to `rUsplit_qidx_SL`, not yet built)
+  — the forward direction's own proof needs it too, for the regrouping step
+  the paper waves through as "the tensor product is commutative in our
+  formalism." Lemma 32 is blocked on the same layer.
+- **The forward direction also needs a separate, second thing this
+  signature has no machinery for at all: an operator-norm/spectral fact.**
+  The paper's step is: `P2 := Û2 Û2^adj` is a positive operator with
+  operator norm at most 1; `‖P2 x‖ = ‖x‖` for a specific `x`; conclude
+  `P2 x = x` (`x` is an eigenvector at eigenvalue 1). This signature has
+  **no operator-norm primitive** and **no spectral theorem for a general
+  bounded operator** (`opositive := forall v, Cge0 (inner v (oapp A v))`
+  has zero derived lemmas anywhere in `Theory.v`; `tcp_decompose` cannot
+  substitute — it is a fact about `tcp X` (trace-class density-matrix-like
+  objects), and `P2 : op X X` is not one). The algebraic route that would
+  avoid a norm axiom (`⟨x,(P2−P2²)x⟩ = ⟨x,x⟩ − ⟨P2 x,P2 x⟩`, which is free
+  from self-adjointness alone) only reaches 0 — and hence `P2 x = x` — if
+  `P2` is a *projector*, which needs `Û2` isometric; the forward direction's
+  own hypothesis (`U1`, `U2` merely bounded by 1, not isometries) does not
+  give that. So this is a second, independent gap, not a variant of the
+  register-coherence one, and it has not been scoped as a candidate axiom
+  yet (unlike §7d's two candidates, which were worked to concrete Rocq
+  statements) — that scoping is real work for whoever picks this back up.
 
 **Update, corrected: the closing claim below was wrong.** `QInit1`'s witness
 (`wf`/`sep`/both projections) is now landed unconditionally (§7d); its
@@ -1086,6 +1123,15 @@ axiom.~~ That was true of Lemma 29/32 in isolation; it is not true of
 reasoning that led to it (the "six lines" and "ordinary proof work"
 estimates) is worth keeping as a record of what turned out wrong twice in
 this same section.
+
+**Further correction, later still: "Lemma 29/32 in isolation" is also not
+quite right.** Checked directly against the paper's proof text: Lemma 29's
+forward direction is *not* free of the `rWsplit2` register-coherence
+obligation either (see the "Current status" block and the closing bullets
+above), and it has its own second, separate gap (the operator-norm/spectral
+step). So as of this update, nothing in §7f is currently unblocked;
+`rWsplit2`/`Urqpair` coherence is the one shared bottleneck for essentially
+everything left in Phase 1d/2 that touches quantum equality.
 
 ### 7g. Then Phase 1e onward
 
