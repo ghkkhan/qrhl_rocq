@@ -222,25 +222,35 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
           factor out, [psi_i = psi_i^Q (x) psi_i^Y], with
           [U1 U_vars,Q1^* psi_1^Q = U2 U_vars,Q2^* psi_2^Q].
         The paper's proof runs on a Schmidt decomposition (its Lemma 7).
-        **Update: the substrate capability this needs is now landed** --
+        **Update: the substrate capability for Schmidt itself is landed** --
         [vsum]/[vsummable]/[schmidt_decompose]/[hmem_tensor_span_component]
         (`Substrate/Interface.v`/`Theory.v`; see HANDOFF.md S6/S7f for the
         design and why a coherent countable vector sum, not one more axiom
-        in the existing vocabulary, was needed). The forward direction's
-        proof itself is still not built -- it is ordinary proof work now,
-        not a design question, though the paper's "positive operator with
-        norm <=1, eigenvector for eigenvalue 1" step (for showing the
-        Schmidt coefficient ratio has modulus 1) has not been scoped and may
-        need its own auxiliary `oisometry`/operator-norm facts; see
-        HANDOFF.md S7f before starting. **The converse direction is also not
-        the "six lines, isometries only" the paper's proof structure
-        suggests for this encoding**: [qeqOp] here routes through
-        [rWsplit2] (the combined-register split of [Q1] and [Q2] together),
-        and relating [rprod v1 v2] (built from [Urqpair] plus the two
-        *individual* splits [Usplit Q1]/[Usplit Q2]) to that combined split
-        is a register coherence layer comparable in size to
-        [rUsplit_qidx_SL] (`Registers.v`), not a one-liner. See HANDOFF.md
-        S7f for both findings in full, including that [Urelab]
+        in the existing vocabulary, was needed). **But this lemma is blocked
+        on two further things, checked against the paper's actual proof
+        text, in *both* directions, not just the converse:**
+        (1) the "P2 x = x" eigenvector step (`P2 := U2-hat U2-hat^adj`, a
+        positive operator with operator norm at most 1) has no available
+        machinery at all -- this signature has no operator-norm primitive
+        and no spectral theorem for a general bounded operator (`opositive`
+        has zero derived lemmas; `tcp_decompose` is the wrong type, since
+        `P2 : op X X` is not a `tcp X`); the algebraic route
+        (`<x,(P2-P2^2)x> = 0`) only closes if `P2` is a projector, which
+        needs `U2-hat` isometric, which the *forward* direction's hypothesis
+        (`U1`, `U2` merely bounded by 1, not isometries) does not give. (2)
+        the paper's own proof regroups `(psi1^Q (x) psi1^Y) (x) (psi2^Q (x)
+        psi2^Y)` into `psi1^Q (x) psi2^Q (x) psi1^Y (x) psi2^Y`, waved
+        through as "the tensor product is commutative in our formalism" --
+        in this encoding that regrouping *is* the [rWsplit2] combined-
+        register coherence layer (below), so **the forward direction needs
+        it too**, not just the converse. (An earlier version of this comment
+        said otherwise; that was wrong, corrected here and in HANDOFF.md
+        S7f.) [qeqOp] routes through [rWsplit2] (the combined-register split
+        of [Q1] and [Q2] together), and relating [rprod v1 v2] (built from
+        [Urqpair] plus the two *individual* splits [Usplit Q1]/[Usplit Q2])
+        to that combined split is a register coherence layer comparable in
+        size to [rUsplit_qidx_SL] (`Registers.v`), not a one-liner. See
+        HANDOFF.md S7f for both findings in full, including that [Urelab]
         (`Registers.v`) and [UYL]/[UYR] just below are the same construction
         in opposite directions -- reuse one rather than building a third
         copy.
