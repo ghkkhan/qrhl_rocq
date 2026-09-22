@@ -368,6 +368,44 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         rewrite Htot, tcp_scale_1; reflexivity.
     Qed.
 
+    (** The witness's [Urqpair]-image is a plain tensor with [qinit_tcp]'s
+        own output -- true for *any* valid decomposition [eta], not just a
+        specific one, since [tcp_tensor_sum_l] pulls the (decomposition-
+        independent) [tcp_proj w] factor out of the sum whole. This is the
+        one piece of the "does psat reduce to a superoperator-level
+        argument" investigation (HANDOFF.md S7d) that turned out to be
+        both new and free; kept here since it is decomposition-agnostic and
+        may be useful again even though it did not, by itself, close [psat]. *)
+    Lemma tcp_conj_Urqpair_witness_sum {J} (eta : J -> l2 qmem) (w : l2 qmem)
+          (Heta : tcp_summable (fun i => tcp_proj (eta i)))
+          (Hetaw : tcp_summable (fun i => tcp_proj (rprod (eta i) w))) :
+      tcp_conj Urqpair (tcp_sum (fun i => tcp_proj (rprod (eta i) w)))
+      = tcp_tensor (tcp_sum (fun i => tcp_proj (eta i))) (tcp_proj w).
+    Proof.
+      rewrite (tcp_conj_sum _ _ _ _ _ Hetaw).
+      assert (Heq : (fun i => tcp_conj Urqpair (tcp_proj (rprod (eta i) w)))
+                    = (fun i => tcp_tensor (tcp_proj (eta i)) (tcp_proj w)))
+        by (apply funext; intros i; apply tcp_conj_Urqpair_rprod).
+      rewrite Heq; symmetry; apply (tcp_tensor_sum_l _ (tcp_proj w) Heta).
+    Qed.
+
+    (** [qinit_hdiv]'s channel invariance: if [SIGMA]'s support already lies
+        in the division [qinit_hdiv A psi], then conjugating it through the
+        witness's own embedding lands inside [A]. Free -- [tcp_supp_conj]
+        plus the existing [himg_le_via_preim] adjunction, no decomposition
+        of [SIGMA] at all. This is the "does the precondition certify the
+        channel's output directly" question from the same investigation:
+        the invariance itself holds unconditionally, but establishing its
+        hypothesis for the specific [SIGMA] the witness produces is exactly
+        where every route tried needs decomposition -- see HANDOFF.md S7d. *)
+    Lemma tcp_supp_qinit_conj_le (A : hspace rqmem) (psi : l2 (qsub P))
+          (SIGMA : tcp (qsub (qneg P) * qmem)) :
+      tcp_supp SIGMA <=h qinit_hdiv P A psi ->
+      tcp_supp (tcp_conj (ocomp (Usplit1 P) (qinit_embed P psi)) SIGMA) <=h A.
+    Proof.
+      intros H; rewrite tcp_supp_conj; apply himg_le_via_preim, H.
+    Qed.
+
   End QInit1Witness.
 
   (* ================================================================= *)
