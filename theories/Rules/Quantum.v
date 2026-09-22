@@ -161,6 +161,88 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   End OneSidedDiscard.
 
   (* ================================================================= *)
+  (** ** QInit1's precondition, reassociation-free
+
+      The paper states [QInit1]'s precondition via [pdiv], which is built
+      from [rUsplit (qidx SL P)] -- the register-indexed split. Relating a
+      membership fact about [rprod v w] to that split forces us through
+      [Uassoc], and [Uassoc] is a [Ubij]: the signature only gives its action
+      on kets ([Ubij_ket]), never on a general (possibly entangled) vector.
+      Three attempts to push [rprod v w]'s membership through [Uassoc] to a
+      general vector all dead-ended there.
+
+      The fix is to state the precondition in the picture the witness
+      ([qinit_tcp] above) already lives in -- [Urqpair] split first, then
+      [Usplit P] on side 1 -- instead of the paper's [qidx]-relabeled split.
+      Every operator here is a [tensoro]/[ocomp] of [Urqpair], [Usplit P] and
+      [otensorL psi]; none of them is a bare [Ubij] applied to a non-ket
+      vector, so the whole reduction goes through on [oapp_ocomp] and
+      [tensoro_app] alone. [rUsplit_qidx_SL] (already proved, in Registers.v)
+      is then the bridge showing this precondition is equivalent to the
+      paper's [pdiv]-based one -- a separate, deferrable obligation, not a
+      dependency of the rule itself. *)
+
+  Section QInitPre.
+    Context (P : qset).
+
+    (** Side 1's plain-product split, [qmem ≅ qsub P * qsub P^c], reassociated
+        against [Urqpair] to land in [rqmem]. Compare [rUsplit (qidx SL P)],
+        which does the same job via [Uassoc] instead. *)
+    Definition Usplit1 : op ((qsub P * qsub (qneg P)) * qmem) rqmem :=
+      ocomp (oadj Urqpair) (tensoro (Usplit P) oid).
+
+    Lemma Usplit1_unitary : ounitary Usplit1.
+    Proof.
+      unfold Usplit1; apply ounitary_ocomp.
+      - apply ounitary_oadj, Urqpair_unitary.
+      - apply ounitary_tensoro; [apply (Wsplit_unitary qvar qtype P) | apply ounitary_oid].
+    Qed.
+
+    (** Embeds a fixed fresh state [psi : l2 (qsub P)] into the nested first
+        position of [Usplit1]'s domain, so that dividing by it never needs to
+        reassociate [(qsub P * qsub P^c) * qmem]. *)
+    Definition qinit_embed (psi : l2 (qsub P)) : op (qsub (qneg P) * qmem) ((qsub P * qsub (qneg P)) * qmem) :=
+      tensoro (otensorL psi) oid.
+
+    (** [A], divided by the fresh state [psi] through the witness's own split
+        -- the Urqpair/[Usplit P] analogue of [pdiv]. *)
+    Definition qinit_hdiv (A : hspace rqmem) (psi : l2 (qsub P)) : hspace (qsub (qneg P) * qmem) :=
+      hpreim (ocomp Usplit1 (qinit_embed psi)) A.
+
+    (** The "unrestricted on [P]" lift of [qinit_hdiv A psi] back up to
+        [Usplit1]'s domain. This is [htensor htop (qinit_hdiv A psi)] in
+        spirit, but [htensor] itself isn't available here: its two factors
+        would associate as [?X * (qsub (qneg P) * qmem)], not
+        [(qsub P * qsub (qneg P)) * qmem]. So it is spelled directly, the way
+        [htensor] itself is spelled -- a raw [hspan] over the generators,
+        letting [q] range over all of [qsub P] where [qinit_embed] above fixed
+        it to [psi]. *)
+    Definition qinit_pre (A : hspace rqmem) (psi : l2 (qsub P)) : hspace rqmem :=
+      himg Usplit1
+        (hspan (fun u => exists (q : l2 (qsub P)) (phi : l2 (qsub (qneg P) * qmem)),
+                  hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
+
+    (** The reduction check: membership of a product state [rprod v w] in the
+        reformulated precondition unfolds to a statement about [v]'s own
+        [Usplit P]-split and [w], with no [Uassoc] anywhere. *)
+    Lemma hmem_qinit_pre (A : hspace rqmem) (psi : l2 (qsub P)) (v w : l2 qmem) :
+      hmem (rprod v w) (qinit_pre A psi)
+      <-> hmem (tensorv (oapp (oadj (Usplit P)) v) w)
+               (hspan (fun u => exists (q : l2 (qsub P)) (phi : l2 (qsub (qneg P) * qmem)),
+                         hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
+    Proof.
+      unfold qinit_pre; rewrite (himg_unitary Usplit1 _ Usplit1_unitary).
+      rewrite hmem_hpreim.
+      unfold Usplit1 at 1; rewrite oadj_ocomp, oapp_ocomp, tensoro_oadj, oadj_oid, oadj_invol.
+      unfold rprod.
+      assert (Hrt : oapp Urqpair (oapp (oadj Urqpair) (tensorv v w)) = tensorv v w).
+      { rewrite <- oapp_ocomp, (proj2 Urqpair_unitary), oapp_oid; reflexivity. }
+      rewrite Hrt, tensoro_app, oapp_oid; reflexivity.
+    Qed.
+
+  End QInitPre.
+
+  (* ================================================================= *)
   (** ** QApply1  [Figure 3, Lemma 65, p. 74]
 
 <<

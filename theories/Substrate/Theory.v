@@ -472,6 +472,35 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   Lemma ounitary_isometry {X Y} (A : op X Y) : ounitary A -> oisometry A.
   Proof. intros [H _]; exact H. Qed.
 
+  (** Unitaries compose, tensor, and dualize to unitaries -- the closure
+      properties [ounitary] needs to be usable on operators built by
+      [ocomp]/[tensoro]/[oadj] rather than only on primitive [Ubij]s. *)
+  Lemma ounitary_ocomp {X Y Z} (A : op Y Z) (B : op X Y) :
+    ounitary A -> ounitary B -> ounitary (ocomp A B).
+  Proof.
+    intros [HA1 HA2] [HB1 HB2]; unfold ounitary; rewrite oadj_ocomp; split.
+    - rewrite <- (ocomp_assoc (oadj B) (oadj A) (ocomp A B)),
+        (ocomp_assoc (oadj A) A B), HA1, ocomp_oid_l; exact HB1.
+    - rewrite <- (ocomp_assoc A B (ocomp (oadj B) (oadj A))),
+        (ocomp_assoc B (oadj B) (oadj A)), HB2, ocomp_oid_l; exact HA2.
+  Qed.
+
+  Lemma ounitary_tensoro {X1 Y1 X2 Y2} (A : op X1 Y1) (B : op X2 Y2) :
+    ounitary A -> ounitary B -> ounitary (tensoro A B).
+  Proof.
+    intros [HA1 HA2] [HB1 HB2]; unfold ounitary; rewrite tensoro_oadj; split.
+    - rewrite <- tensoro_ocomp, HA1, HB1; apply tensoro_oid.
+    - rewrite <- tensoro_ocomp, HA2, HB2; apply tensoro_oid.
+  Qed.
+
+  Lemma ounitary_oadj {X Y} (A : op X Y) : ounitary A -> ounitary (oadj A).
+  Proof.
+    intros [H1 H2]; unfold ounitary; rewrite oadj_invol; split; [exact H2 | exact H1].
+  Qed.
+
+  Lemma ounitary_oid {X} : ounitary (@oid X).
+  Proof. unfold ounitary; rewrite oadj_oid, ocomp_oid_l; split; reflexivity. Qed.
+
   Lemma oisometry_tensoro_l {X X' Y} (A : op X X') :
     oisometry A -> oisometry (@tensoro X X' Y Y A oid).
   Proof.

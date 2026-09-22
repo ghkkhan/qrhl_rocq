@@ -634,6 +634,102 @@ this session (`qinit_tcp` and friends, the `pdiv`/`himg_unitary` fix) is
 still exactly what the witness side will need; only the postcondition step
 was missing a piece, and now it is named rather than silently assumed away.
 
+**Update: the precondition itself has now been reformulated, and this closed
+a second `Uassoc`-shaped dead end.** `pdiv`'s precondition is stated via
+`rUsplit (qidx SL Q)`, and relating a membership fact about `rprod v w` to
+that split forces the reduction through `Uassoc`, which is a `Ubij` — the
+signature only gives its action on kets, never on a general (possibly
+entangled) vector, and three attempts to push `rprod v w`'s membership
+through `Uassoc` to a general vector all dead-ended there (this is a
+different dead end from the `Uprodassoc` one below the trusted-surface table
+in §6 — same underlying wall, hit from the precondition side instead of the
+witness side).
+
+The fix (`Rules/Quantum.v`, `Section QInitPre`): state and prove `QInit1`'s
+precondition in the picture the witness (`qinit_tcp`) already lives in —
+`Urqpair` split first, then `Usplit Q` on side 1 — instead of the paper's
+`qidx`-relabeled split:
+
+```coq
+Definition Usplit1 : op ((qsub P * qsub (qneg P)) * qmem) rqmem :=
+  ocomp (oadj Urqpair) (tensoro (Usplit P) oid).
+
+Definition qinit_embed (psi : l2 (qsub P)) : op (qsub (qneg P) * qmem) ((qsub P * qsub (qneg P)) * qmem) :=
+  tensoro (otensorL psi) oid.
+
+Definition qinit_hdiv (A : hspace rqmem) (psi : l2 (qsub P)) : hspace (qsub (qneg P) * qmem) :=
+  hpreim (ocomp Usplit1 (qinit_embed psi)) A.
+
+Definition qinit_pre (A : hspace rqmem) (psi : l2 (qsub P)) : hspace rqmem :=
+  himg Usplit1
+    (hspan (fun u => exists (q : l2 (qsub P)) (phi : l2 (qsub (qneg P) * qmem)),
+              hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
+```
+
+Every operator here is a `tensoro`/`ocomp` of `Urqpair`, `Usplit Q`, and
+`otensorL psi` — never a bare `Ubij` applied to a non-ket vector — so the key
+reduction lemma, `hmem_qinit_pre`, goes through on `oapp_ocomp` and
+`tensoro_app` alone:
+
+```coq
+Lemma hmem_qinit_pre (A : hspace rqmem) (psi : l2 (qsub P)) (v w : l2 qmem) :
+  hmem (rprod v w) (qinit_pre A psi)
+  <-> hmem (tensorv (oapp (oadj (Usplit P)) v) w)
+           (hspan (fun u => exists q phi, hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
+```
+
+Two things worth recording about *how* this was found, since both are traps
+a future session could fall back into:
+
+- **The `htensor htop (qinit_hdiv A psi)` phrasing (the direct analogue of
+  the paper's `(A÷e') ⊗ l2[Q']`) does not typecheck against `Usplit1`'s
+  domain.** `htensor` builds `hspace (?X * Y)` from `hspace ?X` and
+  `hspace Y`; `Usplit1`'s domain associates as `(qsub P * qsub (qneg P)) *
+  qmem`, so the "unrestricted-on-`P`" factor would have to sit at
+  `?X * (qsub (qneg P) * qmem)` — a *different* parenthesization. `qinit_pre`
+  is instead spelled directly as the `hspan` `htensor` itself would have
+  built, with `q` ranging over all of `qsub P` where `qinit_embed` fixes it
+  to a specific `psi`. This is not a weaker or more ad hoc statement than
+  `htensor` — `hmem_tensor_span_component` (§6) is itself stated over exactly
+  this kind of raw `hspan`, for the same reason.
+- **A detour was floated and abandoned: reassociate via `Uprodassoc` instead
+  (`Usplit2 := ocomp Usplit1 (oadj Uprodassoc)`, domain `qsub P * (qsub (qneg
+  P) * qmem)`, so `htensor` *would* typecheck).** This looked promising
+  because `Uprodassoc`'s action on a *clean* three-fold tensor
+  `tensorv (tensorv a b) c`, for fully general `a b c` (not just kets), turns
+  out to be derivable — by `op_ext_ket` applied three times, one variable at
+  a time, fixing the other two as kets in the base case and then widening
+  them in turn. (That derivation is sound and may be useful elsewhere; it was
+  not added, since nothing currently needs it.) It does not, however, close
+  *this* gap: after the reassociation, the reduction lands on
+  `oapp Uprodassoc (tensorv Y w)` with `Y := oapp (oadj (Usplit P)) v` —
+  and `Y` is opaque (a general, possibly entangled vector, not a clean
+  `tensorv a b`), so the three-ket-extension lemma does not apply to it, and
+  a hypothetical `himg`-level version (`himg Uprodassoc (htensor (htensor S1
+  S2) S3) = htensor S1 (htensor S2 S3)`) does not apply either, because
+  `qinit_hdiv A psi` is a general subspace of `qsub (qneg P) * qmem`, not a
+  product `htensor S2 S3`. Two more lemmas, gap unclosed — abandoned in favor
+  of the `hspan`-over-`q` phrasing above, which needs neither.
+
+Also landed in `Substrate/Theory.v` (general, reusable, not `QInit1`-specific):
+`ounitary_ocomp`, `ounitary_tensoro`, `ounitary_oadj`, `ounitary_oid` — the
+closure lemmas that let `ounitary` be established on operators built by
+`ocomp`/`tensoro`/`oadj` (like `Usplit1`) rather than only on primitive
+`Ubij`s directly. These were the missing piece; oddly, nothing before this
+needed to prove a *composite* operator unitary.
+
+**What is still open** for `rule_QInit1` itself: build the witness from
+`qinit_tcp` plus the per-summand `chi_i` decomposition (§7f's Schmidt
+machinery, applied to `Y := oapp (oadj (Usplit Q)) v` rather than to the
+reduced state, since the postcondition needs the *orthogonal* `(a_i, b_i)`
+pair, not just `tcp_decompose`'s reduced-state pieces — see §7f), then use
+`hmem_qinit_pre` plus `hmem_tensor_span_component` to discharge `psat` on
+each summand. The reformulated `qinit_pre` is a genuine deviation from the
+paper's `pdiv`-based surface form; `rUsplit_qidx_SL` (above) is the bridge
+lemma that should eventually show the two are equivalent (crossing both the
+`qidx` relabeling *and* this association boundary), but that bridge is a
+separate, deferrable obligation — not a dependency of `rule_QInit1`'s proof.
+
 ### 7e. `JointMeasureSimple` (Lem 64)
 
 `Measure1`'s pattern applied on both sides at once, plus the quantum equality
