@@ -719,6 +719,48 @@ correctly-scoped statements — they were authorized and are simply not
 landed, because the proof that would consume them does not close. Nothing
 was pushed to the repository beyond this write-up.
 
+**Update: that superoperator-level strategy was scoped, with `advisor`,
+against a single concrete question — and it also fails, for the same root
+cause, now characterized precisely enough to stop looking for a sixth
+route.** The question posed: is `qinit_pre` strong enough to certify the
+witness channel's output directly, as an invariant, without ever naming a
+pure component? Two genuinely new, **free** facts came out of checking
+this (landed: `tcp_conj_Urqpair_witness_sum`, `tcp_supp_qinit_conj_le`,
+`Rules/Quantum.v`, next to `QInit1_witness_wf_sep_proj`):
+
+- The witness's `Urqpair`-image is *always* a plain tensor with
+  `qinit_tcp`'s own output, `tcp_tensor qinit_tcp_pt (tcp_proj w)` —
+  true for *any* valid decomposition, not a specific one
+  (`tcp_tensor_sum_l` pulls the decomposition-independent `tcp_proj w`
+  factor out of the sum whole).
+- `qinit_hdiv`'s channel invariance holds unconditionally: if a state
+  `SIGMA`'s support already lies in `qinit_hdiv A psi`, conjugating it
+  through the witness's own embedding lands inside `A` — via
+  `tcp_supp_conj` plus the existing `himg_le_via_preim` adjunction, no
+  decomposition of `SIGMA` at all.
+
+**But establishing that invariance's *hypothesis*, for the specific
+`SIGMA` the witness actually produces, needs exactly the same thing every
+other route needed.** Through `tcp_supp_tensor_le`, the hypothesis reduces
+to `htensor (tcp_supp (reduced state)) (hspan1 w) <=h qinit_hdiv`, which
+(via Route C's Galois duality) reduces to `hmem Y (htensor htop (hdivR
+qinit_hdiv w))` — the identical statement every prior route bottomed out
+at. The *inclusion actually available* (`htensor htop T <=h hdivR SPAN w`,
+provable by checking generators directly) is not the one needed; the one
+needed (`hdivR SPAN w <=h htensor htop T`) is the extraction wall, appearing
+for a fifth time. **`qinit_pre`, as currently defined, does not certify
+enough about the channel's output to close `psat` without knowing what the
+input decomposes into.** That is now the precise, checked characterization
+of the blocker — not "needs an axiom," not "needs a different witness,"
+but "the precondition itself is not strong enough as stated." The one
+thing not yet tried, and the most promising lead for a future session, is
+reconsidering `qinit_pre`'s *definition* — not another proof against the
+current one.
+
+`QInit1` is shelved here. Nothing further was pushed to the repository —
+the investigation correctly stopped short of the bar for that rather than
+forcing a result.
+
 **Update: the assessment below (register coherence needs one monolithic
 dependent `Ubij`, "likely the most painful Rocq in the development") was
 wrong, on both difficulty and shape.** It took three small, independent
@@ -1216,12 +1258,32 @@ Recorded so they are not re-derived.
   (`QInit1_witness_wf_sep_proj`), but left `psat` needing more than
   `tcp_decompose` supplies. (4) Schmidt-decomposing `Y` (or the combined
   `oapp Uprodassoc (tensorv Y w)`) to get per-component orthogonality for
-  `psat` — this is the one that needed the two-axiom package, and it still
-  didn't close (§7d). Every attempt independently ran into "reach inside an
-  opaque vector past a `vsum` or a `Ubij`" in a different guise. If a fifth
-  attempt is made, check first whether it also needs that, since it is
-  looking like a property of *this style of witness* (decompose, build
-  per-component, recombine) rather than of any one candidate's details.
+  `psat` — this needed the two-axiom package, and it still didn't close
+  (§7d). (5) a superoperator-level invariant of `qinit_pre`, never naming a
+  pure component at all — this yielded two genuinely new, free lemmas
+  (`tcp_conj_Urqpair_witness_sum`, `tcp_supp_qinit_conj_le`) but *also*
+  didn't close, for the same reason as (4). Every attempt independently ran
+  into "reach inside an opaque vector past a `vsum` or a `Ubij`" in a
+  different guise. **This is now characterized, not just repeated:**
+  `qinit_pre`'s current definition does not certify enough about the
+  witness channel's output to close `psat` without knowing the input's
+  decomposition — see §7d's final update. A sixth attempt against the
+  *same* `qinit_pre` should be expected to hit the same wall; reconsidering
+  `qinit_pre`'s definition itself is the one thing not yet tried.
+- **`hspan_least` lifts generator properties *up* to a span; it does not
+  run the other way.** Repeatedly (twice, while investigating `QInit1`'s
+  `psat`) it looked like `hspan_least` — "check a property on `hspan`'s
+  generators, get it for the whole span" — should also let you go the
+  *other* direction: given a specific element is in a span, extract a fact
+  about one of its components. It does not, and no restructuring of the
+  argument makes it: `hspan_least` proves a universally-quantified
+  implication over the span's own carrier type; it never produces
+  information about a *different* object (like one factor of a specific
+  span member) that isn't itself quantified that way. Extraction from a
+  span member to a component is what axioms like
+  `hmem_tensor_span_component` exist to supply precisely because this
+  general direction is unavailable — don't re-attempt deriving it generically
+  a third time.
 - **A `Ubij`'s action on a general (non-ket) vector is computable when that
   vector is itself a clean tensor product, via a chained `op_ext_ket`
   extension — this generalizes further than it looks at first.** The
