@@ -730,6 +730,18 @@ lemma that should eventually show the two are equivalent (crossing both the
 `qidx` relabeling *and* this association boundary), but that bridge is a
 separate, deferrable obligation — not a dependency of `rule_QInit1`'s proof.
 
+**One concrete mismatch to fix first, before the witness:** `qinit_pre`
+takes `psi : l2 (qsub P)` as one fixed vector, but `qinit_tcp` (and the
+eventual rule statement) takes `psi : rcmem -> l2 (qsub P)` (the fresh
+state can depend on the memory point, since `e`'s value does), and
+`rule_QInit1`'s *precondition* needs to be a `pred` (a function `rqmem ->
+hspace rqmem`), not a single `hspace rqmem`. The join point between what's
+landed and what the rule statement needs is a small pointwise wrapper --
+something like `gmap2 (fun A rm => qinit_pre A (psi (csel SL rm))) A' e`,
+mirroring how `pdiv` itself is a `gmap2` over `ev` -- that doesn't exist yet.
+It's a few lines, but it's the concrete first move for the next session,
+not something to rediscover mid-proof.
+
 ### 7e. `JointMeasureSimple` (Lem 64)
 
 `Measure1`'s pattern applied on both sides at once, plus the quantum equality

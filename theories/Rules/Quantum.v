@@ -222,22 +222,31 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         (hspan (fun u => exists (q : l2 (qsub P)) (phi : l2 (qsub (qneg P) * qmem)),
                   hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
 
-    (** The reduction check: membership of a product state [rprod v w] in the
-        reformulated precondition unfolds to a statement about [v]'s own
-        [Usplit P]-split and [w], with no [Uassoc] anywhere. *)
+    (** The reduction check, isolated as a vector identity: [rprod v w]'s
+        image under [oadj Usplit1] is [v]'s own [Usplit P]-split tensored
+        with [w], with no [Uassoc] anywhere. This is independent of whatever
+        subspace [qinit_pre]/[qinit_hdiv] put on the other side, and it is
+        the fact the eventual [psat] proof will actually want -- kept
+        separate from [hmem_qinit_pre] below rather than folded into it. *)
+    Lemma oapp_oadj_Usplit1 (v w : l2 qmem) :
+      oapp (oadj Usplit1) (rprod v w) = tensorv (oapp (oadj (Usplit P)) v) w.
+    Proof.
+      unfold Usplit1 at 1; rewrite oadj_ocomp, oapp_ocomp, tensoro_oadj, oadj_oid, oadj_invol.
+      unfold rprod.
+      assert (Hrt : oapp Urqpair (oapp (oadj Urqpair) (tensorv v w)) = tensorv v w).
+      { rewrite <- oapp_ocomp, (proj2 Urqpair_unitary), oapp_oid; reflexivity. }
+      rewrite Hrt, tensoro_app, oapp_oid; reflexivity.
+    Qed.
+
     Lemma hmem_qinit_pre (A : hspace rqmem) (psi : l2 (qsub P)) (v w : l2 qmem) :
       hmem (rprod v w) (qinit_pre A psi)
       <-> hmem (tensorv (oapp (oadj (Usplit P)) v) w)
                (hspan (fun u => exists (q : l2 (qsub P)) (phi : l2 (qsub (qneg P) * qmem)),
                          hmem phi (qinit_hdiv A psi) /\ u = oapp (qinit_embed q) phi)).
     Proof.
-      unfold qinit_pre; rewrite (himg_unitary Usplit1 _ Usplit1_unitary).
-      rewrite hmem_hpreim.
-      unfold Usplit1 at 1; rewrite oadj_ocomp, oapp_ocomp, tensoro_oadj, oadj_oid, oadj_invol.
-      unfold rprod.
-      assert (Hrt : oapp Urqpair (oapp (oadj Urqpair) (tensorv v w)) = tensorv v w).
-      { rewrite <- oapp_ocomp, (proj2 Urqpair_unitary), oapp_oid; reflexivity. }
-      rewrite Hrt, tensoro_app, oapp_oid; reflexivity.
+      unfold qinit_pre; rewrite (himg_unitary Usplit1 _ Usplit1_unitary), hmem_hpreim,
+        oapp_oadj_Usplit1.
+      reflexivity.
     Qed.
 
   End QInitPre.

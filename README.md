@@ -329,6 +329,17 @@ additionally needs the reassociation `Ubij`'s dependent round-trip proofs over
 `HANDOFF.md` §7d. The alternative to any of this is an abstract register
 primitive (Unruh's *Registers*, CoqQ's `qreg`), a larger redesign.
 
+A second, independent `Uassoc`-shaped wall showed up on the precondition
+side: the paper's `pdiv`-based precondition is built from `rUsplit (qidx SL
+Q)`, and relating a product-state membership fact to that split forces the
+same "`Ubij` on a general vector" reduction through `Uassoc`. `QInit1` will
+therefore be proved against a reformulated precondition (`qinit_pre`,
+`Rules/Quantum.v`) stated directly in the `Urqpair`/`Usplit Q` picture the
+witness already lives in, rather than against `pdiv` itself; `rUsplit_qidx_SL`
+is the bridge lemma that would show the two are equivalent, kept as a
+separate, deferred obligation rather than a dependency of the rule. See
+`HANDOFF.md` §7d for the reduction and the `Uprodassoc` detour it ruled out.
+
 ### Two remaining gaps in §4.4
 
 **Lemma 29 / Corollary 30** — the characterization of quantum equality on
