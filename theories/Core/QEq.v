@@ -222,26 +222,28 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
           factor out, [psi_i = psi_i^Q (x) psi_i^Y], with
           [U1 U_vars,Q1^* psi_1^Q = U2 U_vars,Q2^* psi_2^Q].
         The paper's proof runs on a Schmidt decomposition (its Lemma 7).
-        **This is not addable as one more axiom in the existing vocabulary**:
-        it is a *countable coherent vector sum* (a superposition, converging
-        in norm), and the signature has no such primitive -- [vadd]/[vscale]
-        are binary only, and [tcp_sum] sums positive trace-class operators as
-        a *mixture*, which cannot substitute (a pure state's [tcp_proj] has
-        rank 1 always; a [tcp_sum] of several non-collinear rank-1
-        projections does not). Adding a coherent countable vector sum widens
-        the continuity boundary that is this project's central soundness
-        claim, and is a decision for the project's owner, not a mid-proof
-        call -- see HANDOFF.md S7f. **The converse direction is also not the
-        "six lines, isometries only" the paper's proof structure suggests
-        for this encoding**: [qeqOp] here routes through [rWsplit2] (the
-        combined-register split of [Q1] and [Q2] together), and relating
-        [rprod v1 v2] (built from [Urqpair] plus the two *individual* splits
-        [Usplit Q1]/[Usplit Q2]) to that combined split is a register
-        coherence layer comparable in size to [rUsplit_qidx_SL]
-        (`Registers.v`), not a one-liner. See HANDOFF.md S7f for both
-        findings in full, including that [Urelab] (`Registers.v`) and
-        [UYL]/[UYR] just below are the same construction in opposite
-        directions -- reuse one rather than building a third copy.
+        **Update: the substrate capability this needs is now landed** --
+        [vsum]/[vsummable]/[schmidt_decompose]/[hmem_tensor_span_component]
+        (`Substrate/Interface.v`/`Theory.v`; see HANDOFF.md S6/S7f for the
+        design and why a coherent countable vector sum, not one more axiom
+        in the existing vocabulary, was needed). The forward direction's
+        proof itself is still not built -- it is ordinary proof work now,
+        not a design question, though the paper's "positive operator with
+        norm <=1, eigenvector for eigenvalue 1" step (for showing the
+        Schmidt coefficient ratio has modulus 1) has not been scoped and may
+        need its own auxiliary `oisometry`/operator-norm facts; see
+        HANDOFF.md S7f before starting. **The converse direction is also not
+        the "six lines, isometries only" the paper's proof structure
+        suggests for this encoding**: [qeqOp] here routes through
+        [rWsplit2] (the combined-register split of [Q1] and [Q2] together),
+        and relating [rprod v1 v2] (built from [Urqpair] plus the two
+        *individual* splits [Usplit Q1]/[Usplit Q2]) to that combined split
+        is a register coherence layer comparable in size to
+        [rUsplit_qidx_SL] (`Registers.v`), not a one-liner. See HANDOFF.md
+        S7f for both findings in full, including that [Urelab]
+        (`Registers.v`) and [UYL]/[UYR] just below are the same construction
+        in opposite directions -- reuse one rather than building a third
+        copy.
 
       - Lemma 32, [(A1»Q1) . (U1 Q1 =quant U2 Q2) = (U1 A1^adj) Q1 =quant U2 Q2]
         for unitary [A1], which is how rule QApply1's preconditions get
