@@ -718,29 +718,80 @@ closure lemmas that let `ounitary` be established on operators built by
 `Ubij`s directly. These were the missing piece; oddly, nothing before this
 needed to prove a *composite* operator unitary.
 
-**What is still open** for `rule_QInit1` itself: build the witness from
-`qinit_tcp` plus the per-summand `chi_i` decomposition (§7f's Schmidt
-machinery, applied to `Y := oapp (oadj (Usplit Q)) v` rather than to the
-reduced state, since the postcondition needs the *orthogonal* `(a_i, b_i)`
-pair, not just `tcp_decompose`'s reduced-state pieces — see §7f), then use
-`hmem_qinit_pre` plus `hmem_tensor_span_component` to discharge `psat` on
-each summand. The reformulated `qinit_pre` is a genuine deviation from the
-paper's `pdiv`-based surface form; `rUsplit_qidx_SL` (above) is the bridge
-lemma that should eventually show the two are equivalent (crossing both the
-`qidx` relabeling *and* this association boundary), but that bridge is a
-separate, deferrable obligation — not a dependency of `rule_QInit1`'s proof.
+**Update: the witness's `wf`/`sep`/both projections are now landed
+unconditionally, and the one remaining piece (`psat`) has been narrowed to a
+precise, named substrate-capability question — not "ordinary proof work" as
+an earlier draft of this section claimed.**
 
-**One concrete mismatch to fix first, before the witness:** `qinit_pre`
-takes `psi : l2 (qsub P)` as one fixed vector, but `qinit_tcp` (and the
-eventual rule statement) takes `psi : rcmem -> l2 (qsub P)` (the fresh
-state can depend on the memory point, since `e`'s value does), and
-`rule_QInit1`'s *precondition* needs to be a `pred` (a function `rqmem ->
-hspace rqmem`), not a single `hspace rqmem`. The join point between what's
-landed and what the rule statement needs is a small pointwise wrapper --
-something like `gmap2 (fun A rm => qinit_pre A (psi (csel SL rm))) A' e`,
-mirroring how `pdiv` itself is a `gmap2` over `ev` -- that doesn't exist yet.
-It's a few lines, but it's the concrete first move for the next session,
-not something to rediscover mid-proof.
+The key move (found via the `advisor` tool after the `chi_i`-orthogonality
+plan above stalled): decompose not the *reduced* state but `qinit_tcp`'s own
+*output* value on the pure input `tcp_proj v` (equivalently, `sem_qinit`'s
+per-block formula — see `sem_qinit_cqdirac`, `Rules/Quantum.v`, which unfolds
+`sem_qinit` at a `cqdirac` point mass down to exactly `qinit_tcp`'s shape).
+`tcp_decompose` applied there gives a family `eta : J -> l2 qmem` with
+`tcp_summable (fun i => tcp_proj (eta i))` and the output equal to
+`tcp_sum (fun i => tcp_proj (eta i))`. The witness is then
+
+```coq
+r' := rdirac (m1, m2) (tcp_sum (fun i => tcp_proj (rprod (eta i) w)))
+```
+
+and `QInit1_witness_wf_sep_proj` (`Rules/Quantum.v`) proves `rcqs_wf r'`,
+`rcqs_sep r'`, and both projections *unconditionally* — i.e. for *any* family
+`eta` of this shape, not just `tcp_decompose`'s specific output. Two general
+lemmas were added alongside it in `Judgment.v`: `rtcpL_rprod_gen`/
+`rtcpR_rprod_gen`, the unnormalized versions of the existing
+`rtcpL_rprod`/`rtcpR_rprod` (dropping the normalization hypothesis leaves the
+scale factor `Cre (inner _ _)` visible instead of collapsing it to `1`,
+which is exactly what a spectral-decomposition term needs).
+
+**`psat` is the one obligation this does not close, and it needs a new
+substrate axiom either way — this was checked, not assumed:**
+
+- **Route A (Schmidt-based):** relate `eta` (or, better, work directly with
+  `v`'s own Schmidt decomposition `Y = vsum (fun k => vscale (lam k)
+  (tensorv (a k) (b k)))`) to the precondition via `hmem_qinit_pre` +
+  `hmem_tensor_span_component`. This requires knowing that Schmidt's own
+  `(lam k, b k)` give a valid `tcp_decompose` of the reduced state
+  `tcp_ptrace2 (tcp_proj Y)` — i.e. a fact of the shape "`tcp_ptrace2
+  (tcp_proj (vsum F)) = tcp_sum (fun k => tcp_scale (...) (tcp_proj (b k)))`
+  for a Schmidt-shaped `F`". This is *not derivable*: `vsum` is
+  write-only in the current signature (its only axioms are
+  `vsum_not_summable` and `vsummable_orthogonal`; nothing relates it to
+  `tcp_proj` or `tcp_ptrace2` at all), so there is no route from "`Y` is a
+  coherent sum" to a fact about the density operator `tcp_proj Y`.
+- **Route B (support-based):** show `qinit_tcp`'s output's support is
+  `himg (Usplit P) (htensor (hspan {psi}) (tcp_supp (reduced state)))`, which
+  would place every `eta i` (being in that support) in the "clean product
+  with `psi` on the `P` side" shape directly. This needs `tcp_supp (tcp_tensor
+  r s)` related to `htensor (tcp_supp r) (tcp_supp s)` — the exact gap
+  already flagged, and re-confirmed absent, in §7f below (`tcp_supp`'s
+  axioms are only `_eq0`/`_proj`/`_add`/`_scale`/`_sum`/`_conj`; there is no
+  `_tensor`).
+
+Both routes bottom out in a **new** substrate axiom — one about `vsum`'s
+interaction with `tcp_proj`/`tcp_ptrace2` (widening the same coherent-sum
+boundary §6/§7f already widened once), the other about `tcp_supp`'s
+interaction with `tcp_tensor` (a difference boundary, about supports rather
+than sums). Neither is a "no new axiom needed" situation, contradicting this
+section's and §7f's prior close-out note — **that claim was wrong and is
+corrected here and in §7f.** Which (if either) to add is a substrate-design
+decision, not a call to make mid-proof; it needs the same kind of
+counterexample-checked scrutiny the `vsum`/`schmidt_decompose` addition got
+in §6, and is the user's to make.
+
+`rUsplit_qidx_SL` (above) remains the bridge lemma that would eventually
+show the reformulated `qinit_pre` is equivalent to the paper's `pdiv`-based
+one; that bridge is still a separate, deferrable obligation, not a
+dependency of `rule_QInit1`'s proof.
+
+**The `psi`/`pred`-wrapper mismatch noted in an earlier draft of this
+section is superseded**: `QInit1_witness_wf_sep_proj` is stated directly in
+terms of `e : expr (l2 (qsub P))` and a fixed `(m1, m2)` (matching
+`qrhl_pure`'s own per-point-mass shape), so the wrapper is needed only for
+`rule_QInit1`'s *precondition* (`gmap2` over `A` and `idx SL e`, exactly as
+sketched before) — a small, mechanical step, not yet written, and not
+blocked on anything above.
 
 ### 7e. `JointMeasureSimple` (Lem 64)
 
@@ -837,11 +888,21 @@ open, and is ordinary proof work rather than a design question**:
 - Lemma 29's converse direction and Lemma 32, both blocked on the
   `rWsplit2`/`Urqpair` coherence layer described above (comparable in size
   to `rUsplit_qidx_SL`, not yet built).
-- `QInit1` itself (§7d), once Lemma 29's forward direction (or at least the
-  specific `schmidt_decompose`/`hmem_tensor_span_component` combination it
-  needs) is in hand.
 
-None of the above should need another new axiom.
+**Update, corrected: the closing claim below was wrong.** `QInit1`'s witness
+(`wf`/`sep`/both projections) is now landed unconditionally (§7d); its
+`psat` obligation was worked all the way through and does *not* reduce to
+Lemma 29's forward direction or to anything else already in the file — see
+§7d's account. Both routes tried (Schmidt-based, support-based) bottom out
+in a new substrate axiom (`vsum` vs. `tcp_proj`/`tcp_ptrace2` on one route,
+`tcp_supp` vs. `tcp_tensor` on the other), confirming the `tcp_supp`-vs-
+`htensor` gap flagged just above is real and load-bearing, not a dead end
+that can be routed around. ~~None of the above should need another new
+axiom.~~ That was true of Lemma 29/32 in isolation; it is not true of
+`QInit1`, and is corrected in §7d rather than deleted here, since the
+reasoning that led to it (the "six lines" and "ordinary proof work"
+estimates) is worth keeping as a record of what turned out wrong twice in
+this same section.
 
 ### 7g. Then Phase 1e onward
 

@@ -252,6 +252,125 @@ Module QuantumRules (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
   End QInitPre.
 
   (* ================================================================= *)
+  (** ** QInit1's witness: well-formedness, separability, both projections
+
+      [tcp_decompose], applied not to the reduced state but directly to
+      [qinit_tcp]'s own value on the pure input [tcp_proj v] (i.e. to
+      [sem_qinit]'s per-block formula, via [sem_qinit_cqdirac] below), gives a
+      family [eta] whose projections sum to it. Re-tensoring each [eta i]
+      with the untouched side [w] and re-summing into a single point mass at
+      [(m1, m2)] gives a witness whose well-formedness, separability, and two
+      projections are all provable *unconditionally* -- see
+      [QInit1_witness_wf_sep_proj]. Only [psat] is missing, and it is not
+      proved here: relating the family [eta] back to the (reformulated)
+      precondition needs either a coherent-vector extraction fact (the same
+      kind of thing [hmem_tensor_span_component] is, applied to [v]'s own
+      Schmidt decomposition rather than [eta]) or a `tcp_supp` vs. `htensor`
+      axiom relating the support of a [tcp_tensor] to the tensor of its
+      factors' supports -- neither is in the substrate, and HANDOFF.md's §7f
+      account of why has been corrected (this is *not*, as an earlier
+      revision of that section claimed, "ordinary proof work needing no new
+      axiom"). This is a substrate-capability question, the same kind as
+      Schmidt/vsum itself, and it is the user's call, not a call to make here. *)
+
+  Section QInit1Witness.
+    Context (P : qset) (e : expr (l2 (qsub P))).
+
+    (** [sem_qinit] at a pure point mass, unfolded down to a single [tcp qmem]
+        formula -- matches [qinit_tcp]'s own shape (Section [OneSidedDiscard]
+        above) with [psi] fixed to the constant [fun _ => ev e m1]. *)
+    Lemma sem_qinit_cqdirac (m1 : cmem) (v : l2 qmem) :
+      sem_qinit P e (cqdirac m1 (tcp_proj v))
+      = cqdirac m1 (tcp_conj (Usplit P)
+          (tcp_tensor (tcp_proj (ev e m1))
+            (tcp_ptrace2 (tcp_conj (oadj (Usplit P)) (tcp_proj v))))).
+    Proof.
+      apply funext; intros m.
+      destruct (excluded_middle_informative (m = m1)) as [-> | Hne].
+      - unfold sem_qinit; rewrite !cqdirac_same; reflexivity.
+      - unfold sem_qinit; rewrite (cqdirac_other m1 m (tcp_proj v) Hne).
+        rewrite tcp_conj_zero, tcp_ptraceL_zero, tcp_tensor_zero_r, tcp_conj_zero.
+        rewrite (cqdirac_other m1 m _ Hne).
+        reflexivity.
+    Qed.
+
+    (** [eta] need not be [tcp_decompose]'s output specifically -- any family
+        with these two properties (a [tcp_decompose]-shaped witness of
+        [qinit_tcp]'s value, matching [sem_qinit_cqdirac]'s RHS) gives a valid
+        witness for [wf]/[sep]/both projections. *)
+    Lemma QInit1_witness_wf_sep_proj
+          (m1 m2 : cmem) (v w : l2 qmem)
+          (Hv : inner v v = C1) (Hw : inner w w = C1)
+          (He1 : inner (ev e m1) (ev e m1) = C1)
+          {J : Type} (eta : J -> l2 qmem)
+          (Heta : tcp_summable (fun i => tcp_proj (eta i)))
+          (Heq : tcp_conj (Usplit P)
+                   (tcp_tensor (tcp_proj (ev e m1))
+                     (tcp_ptrace2 (tcp_conj (oadj (Usplit P)) (tcp_proj v))))
+                 = tcp_sum (fun i => tcp_proj (eta i))) :
+      let r' := rdirac (m1, m2) (tcp_sum (fun i => tcp_proj (rprod (eta i) w))) in
+      rcqs_wf r' /\ rcqs_sep r'
+      /\ rcqs_projL r' = denote (QInit P e) (cqdirac m1 (tcp_proj v))
+      /\ rcqs_projR r' = denote Skip (cqdirac m2 (tcp_proj w)).
+    Proof.
+      cbv zeta.
+      assert (Htr : forall i, tcp_trace (tcp_proj (rprod (eta i) w)) = tcp_trace (tcp_proj (eta i))).
+      { intros i.
+        assert (Hc : tcp_trace (tcp_conj Urqpair (tcp_proj (rprod (eta i) w)))
+                     = tcp_trace (tcp_proj (rprod (eta i) w)))
+          by (apply tcp_trace_conj_isometry, (proj1 Urqpair_unitary)).
+        rewrite tcp_conj_Urqpair_rprod, tcp_trace_tensor, (tcp_trace_proj _ w), Hw in Hc.
+        replace (Cre C1) with 1%R in Hc by reflexivity.
+        rewrite Rmult_1_r in Hc.
+        rewrite <- Hc; reflexivity. }
+      assert (Hetaw : tcp_summable (fun i => tcp_proj (rprod (eta i) w))).
+      { apply tcp_summable_trace.
+        assert (Heqf : (fun i => tcp_trace (tcp_proj (rprod (eta i) w)))
+                       = (fun i => tcp_trace (tcp_proj (eta i))))
+          by (apply funext; exact Htr).
+        rewrite Heqf; apply tcp_summable_trace; exact Heta. }
+      repeat split.
+      - apply rdirac_wf.
+      - apply rdirac_sep, rsep_sum; [ exact Hetaw | intros i; apply rsep_rprod ].
+      - cbn [denote]; rewrite (sem_qinit_cqdirac m1 v), rcqs_projL_rdirac, (rtcpL_sum _ Hetaw).
+        assert (Heq2 : (fun i => rtcpL (tcp_proj (rprod (eta i) w)))
+                       = (fun i => tcp_proj (eta i))).
+        { apply funext; intros i.
+          rewrite rtcpL_rprod_gen, Hw.
+          replace (Cre C1) with 1%R by reflexivity.
+          apply tcp_scale_1. }
+        rewrite Heq2, <- Heq; reflexivity.
+      - cbn [denote]; rewrite rcqs_projR_rdirac, (rtcpR_sum _ Hetaw).
+        assert (Heq3 : (fun i => rtcpR (tcp_proj (rprod (eta i) w)))
+                       = (fun i => tcp_scale (Cre (inner (eta i) (eta i))) (tcp_proj w)))
+          by (apply funext; intros i; apply rtcpR_rprod_gen).
+        rewrite Heq3.
+        assert (Hnn : forall i, (0 <= Cre (inner (eta i) (eta i)))%R).
+        { intros i; rewrite <- tcp_trace_proj; apply tcp_trace_nonneg. }
+        assert (Hsum1 : summable (fun i => Cre (inner (eta i) (eta i)))).
+        { assert (Heqc : (fun i => Cre (inner (eta i) (eta i)))
+                         = (fun i => tcp_trace (tcp_proj (eta i))))
+            by (apply funext; intros i; symmetry; apply tcp_trace_proj).
+          rewrite Heqc; apply tcp_summable_trace; exact Heta. }
+        rewrite (tcp_sum_scale_const _ _ (fun i => Cre (inner (eta i) (eta i))) (tcp_proj w) Hnn Hsum1).
+        assert (Htot : tsum (fun i => Cre (inner (eta i) (eta i))) = 1%R).
+        { assert (Hval : tsum (fun i => Cre (inner (eta i) (eta i)))
+                         = tsum (fun i => tcp_trace (tcp_proj (eta i)))).
+          { f_equal; apply funext; intros i; symmetry; apply tcp_trace_proj. }
+          rewrite Hval, <- (tcp_trace_sum _ _ _ Heta), <- Heq.
+          rewrite (tcp_trace_conj_isometry _ _ _ _ (ounitary_isometry _ (Wsplit_unitary qvar qtype P))).
+          rewrite tcp_trace_tensor, tcp_trace_proj, He1.
+          replace (Cre C1) with 1%R by reflexivity; rewrite Rmult_1_l.
+          rewrite tcp_ptrace2_trace.
+          rewrite (tcp_trace_conj_isometry _ _ _ _
+                     (oisometry_oadj (Usplit P) (Wsplit_unitary qvar qtype P))).
+          rewrite tcp_trace_proj, Hv; reflexivity. }
+        rewrite Htot, tcp_scale_1; reflexivity.
+    Qed.
+
+  End QInit1Witness.
+
+  (* ================================================================= *)
   (** ** QApply1  [Figure 3, Lemma 65, p. 74]
 
 <<

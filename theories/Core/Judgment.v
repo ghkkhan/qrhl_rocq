@@ -996,6 +996,22 @@ Module JudgmentTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     apply tcp_scale_1.
   Qed.
 
+  (** The unnormalized versions: dropping [rtcpL_rprod]/[rtcpR_rprod]'s
+      normalization hypothesis leaves the scale factor visible instead of
+      collapsing it to [1]. Needed when the other side's vector is not known
+      to be a unit vector -- e.g. one term of a spectral decomposition. *)
+  Lemma rtcpL_rprod_gen (v w : l2 qmem) :
+    rtcpL (tcp_proj (rprod v w)) = tcp_scale (Cre (inner w w)) (tcp_proj v).
+  Proof.
+    unfold rtcpL; rewrite tcp_conj_Urqpair_rprod, tcp_ptrace_tensor, tcp_trace_proj; reflexivity.
+  Qed.
+
+  Lemma rtcpR_rprod_gen (v w : l2 qmem) :
+    rtcpR (tcp_proj (rprod v w)) = tcp_scale (Cre (inner v v)) (tcp_proj w).
+  Proof.
+    unfold rtcpR; rewrite tcp_conj_Urqpair_rprod, tcp_ptraceL_tensor, tcp_trace_proj; reflexivity.
+  Qed.
+
   (** The converse of [tcp_conj_Urqpair_rprod]: a pure product's projection
       read back from the tensor side. Needed by Lemma 36's converse to move
       the per-factor normalization ([tcp_proj_decompose_unit]) across
