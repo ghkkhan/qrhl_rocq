@@ -375,31 +375,28 @@ Sections are numbered `7a`..`7g` in the order they were tackled historically,
 not in blocked-by order; read this map first, then jump to the section that
 matches what you're picking up.
 
-**The very next step is a decision, not a proof: whether to add two new
-substrate axioms together to finish `QInit1`, or leave it open.** Full
-detail is at the end of §7d, but in short: `QInit1`'s witness
-(well-formedness, separability, both projections) is landed unconditionally,
-and everything else about the rule is ordinary, already-understood proof
-work. The one remaining piece, `psat`, was checked three independent ways,
-worked all the way through each time (not assumed to reduce), and the
-finding sharpened as each was checked: a promising-looking candidate
-(`tcp_supp_tensor`) turned out derivable for free (landed, no axiom, no
-decision needed there); a second (`tcp_supp_ptrace2`, `advisor`-recommended
-on structural-fit grounds) was rejected on a verified check -- it needs an
-`hspan`-extraction step first that isn't available; and the third
-(widening the Schmidt/`vsum` boundary again) is viable but needs **two**
-axioms together, not one -- a mirror-orientation gap in the existing
-`hmem_tensor_span_component` that isn't derivable from what's landed. Both
-candidate statements are written out together (they are a package) at the
-end of §7d. **This is a real scope change from "one more axiom" to "two,"
-and it is the user's call, not a call to make solo.** If the answer is yes,
-landing them (each with a `Sanity.v` canary, per standing practice) makes
-finishing `rule_QInit1` itself mechanical: discharge `psat`, write the small
-`pred`-wrapper noted at the end of §7d, and assemble via `qrhl_pure_to_qrhl`
-(already proved, §7a) the same way every other one-sided rule in
-`Rules/Quantum.v` does. If the answer is no, `QInit1` stays open — and, as
-of the correction below, that does *not* leave §7e/§7f as a ready
-alternative front the way an earlier version of this section claimed.
+**`QInit1`'s `psat` is now blocked on proof *strategy*, not on which axiom
+to add — this was checked, all the way through, not assumed.** Four
+candidates/routes were tried in total (see the end of §7d for the full
+account): one turned out derivable for free (`tcp_supp_tensor_le`, landed);
+one was `advisor`-recommended, then rejected on a verified check; the
+remaining two (widening Schmidt/`vsum` again, plus its mirror) were
+user-authorized on the condition that `psat` be proved end to end *before*
+either touched `Interface.v` — and the end-to-end attempt failed too, for a
+structurally deeper reason shared by every extraction approach tried: every
+route needs to reach inside a vector sitting on the far side of a `vsum` or
+a `Ubij`, which is not available regardless of which axiom backs the
+extraction. **Neither axiom was landed.** The two candidate statements
+remain honest and correctly scoped, just unused — see the end of §7d.
+
+**The real next question for `QInit1` is whether it admits a proof strategy
+that never needs per-Schmidt-component extraction at all** — e.g. one that
+stays entirely at the `tcp`/superoperator level, the way the already-landed
+`qinit_tcp_trace`/`_scale`/`_sum` do. That is fresh scoping work, ideally
+with `advisor`, not a continuation of the chain above. `QInit1` therefore
+stays open, and that does *not* leave §7e/§7f as a ready alternative front
+the way an earlier version of this section claimed either — see the
+correction just below.
 
 **Correction: §7e/§7f are not actually independent of each other, and
 neither is close to unblocked.** Checked directly against the paper's proof
@@ -661,6 +658,66 @@ precondition reformulation, and the full trail of routes tried for `psat`
 (`tcp_supp_tensor` turned out derivable for free — `tcp_supp_tensor_le`,
 landed — but insufficient alone; Route C likewise insufficient alone; Route
 A insufficient *alone* despite being the closest of the three).
+
+**Update: the user authorized landing Route A's two axioms, on the explicit
+condition that `psat` be proved end to end first, *before* either axiom
+touches `Interface.v` — because three separate "this will close it"
+predictions had already failed by this point. The end-to-end attempt
+failed too, on a fourth, structurally deeper reason. Neither axiom was
+landed. `psat` is blocked on proof *strategy*, not on which axiom to add.**
+
+Attempting the full chain (Schmidt-decompose `Y`, get per-component facts
+`hmem (a k) (qsub P)`/`hmem (b k) (...)`, build the witness from
+`eta_k := oapp (Usplit P) (tensorv psi (b k))`, discharge `psat` via
+`hmem_qinit_pre` + the mirror axiom) needs one more step neither axiom
+supplies: getting from the *given* hypothesis (`hmem (tensorv Y w) SPAN`,
+a fact about `Y` and `w` *together*) to a per-Schmidt-component fact about
+`b k` *alone*. Two ways to take that step were tried, and **both fail for
+the same underlying reason**, not two unrelated ones:
+
+- **Divide `SPAN` by `w` first**, then Schmidt-decompose `Y` in the divided
+  space. This needs "dividing a subspace by a fixed vector commutes with
+  taking a span" (`hpreim (otensorR w) (hspan M) `-vs-` hspan (fun z => ...)`)
+  — a fact about `hspan` interacting with a linear map generally, and
+  it is not available (the "easy" inclusion holds via `htensor_le`
+  generator-checking; the inclusion actually needed does not, for the same
+  reason `hmem_tensor_span_component` had to be its own axiom rather than a
+  general `hspan`-and-linear-maps fact).
+- **Schmidt-decompose the combined vector directly**: apply
+  `schmidt_decompose` to `Z := oapp Uprodassoc (tensorv Y w)` (splitting
+  `qsub P` vs. everything else at once, sidestepping the "divide by `w`"
+  step). This *does* extract per-component facts `hmem (d k) (qinit_hdiv
+  ...)`, but `d k : l2 (qsub (qneg P) * qmem)` comes out *opaque* — not
+  split into a `qsub (qneg P)`-part and a `qmem`-part — because recovering
+  that split needs `oapp (oadj Uprodassoc) (tensorv c_k d_k)` for `d_k` not
+  itself a clean product, which is exactly the "`Ubij` on an opaque
+  argument" wall this session hit repeatedly (§8). The resulting witness
+  pieces cannot be recombined with the already-landed
+  `QInit1_witness_wf_sep_proj` witness shape (`eta : J -> l2 qmem`, fixed
+  `w`) at all — it is a different, incompatible witness structure.
+
+**Both routes need to reach inside a vector sitting on the far side of a
+`vsum` or a `Ubij` — the same wall, not two different ones.** That is a
+property of *this specific proof strategy* (extract per-Schmidt-component
+membership facts, then recombine them into a witness), not of which axiom
+backs the extraction step. Adding a third or fourth axiom to patch *this*
+extraction would very likely hit the same wall again in a new guise —
+this is the point at which `advisor`'s own stated condition ("if the
+end-to-end attempt turns up a third gap, stop and reconsider whether this
+rule wants a different proof strategy entirely") applies, and it was
+followed rather than pushed past.
+
+**What whoever resumes this should actually do first is ask whether
+`QInit1` admits a proof that never needs per-Schmidt-component extraction
+at all** — e.g. one that stays entirely at the `tcp`/superoperator level
+throughout, the way `qinit_tcp_trace`/`_scale`/`_sum` (already landed) do,
+rather than decomposing a coherent vector sum and recombining pieces. That
+is a strategy question, worth scoping fresh with `advisor` before writing
+any more Rocq toward this specific witness shape, not another patch to the
+chain above. The two candidate axioms above remain honest, textbook,
+correctly-scoped statements — they were authorized and are simply not
+landed, because the proof that would consume them does not close. Nothing
+was pushed to the repository beyond this write-up.
 
 **Update: the assessment below (register coherence needs one monolithic
 dependent `Ubij`, "likely the most painful Rocq in the development") was
@@ -1148,6 +1205,23 @@ and Phase 4's finite-dimensional model — which is the only thing that turns
 
 Recorded so they are not re-derived.
 
+- **`QInit1`'s witness has now been redesigned four separate times, and the
+  pattern across all four is worth naming.** (1) `qinitL_op`, routing
+  through `Uprodassoc` and needing an ever-growing sequence of
+  partial-trace/reassociation axioms — reverted. (2) `qinit_tcp` decomposing
+  the *reduced* state via `tcp_decompose`, which gives no orthogonality
+  relation back to the original vector — insufficient for `psat`. (3)
+  decomposing `qinit_tcp`'s own *output* via `tcp_decompose` — this one
+  landed cleanly for `wf`/`sep`/both projections
+  (`QInit1_witness_wf_sep_proj`), but left `psat` needing more than
+  `tcp_decompose` supplies. (4) Schmidt-decomposing `Y` (or the combined
+  `oapp Uprodassoc (tensorv Y w)`) to get per-component orthogonality for
+  `psat` — this is the one that needed the two-axiom package, and it still
+  didn't close (§7d). Every attempt independently ran into "reach inside an
+  opaque vector past a `vsum` or a `Ubij`" in a different guise. If a fifth
+  attempt is made, check first whether it also needs that, since it is
+  looking like a property of *this style of witness* (decompose, build
+  per-component, recombine) rather than of any one candidate's details.
 - **A `Ubij`'s action on a general (non-ket) vector is computable when that
   vector is itself a clean tensor product, via a chained `op_ext_ket`
   extension — this generalizes further than it looks at first.** The
