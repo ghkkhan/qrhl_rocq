@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `cddf5f7`. Seventeen of the paper's rules are proved,
+Last updated at commit `8d1638c`. Seventeen of the paper's rules are proved,
 Lemma 36 is proved in both directions, and there are no admits and no axioms
 outside the substrate signature (which now includes a countable coherent
 vector sum and the Schmidt decomposition -- see §6/§7f).
@@ -779,6 +779,59 @@ corrected here and in §7f.** Which (if either) to add is a substrate-design
 decision, not a call to make mid-proof; it needs the same kind of
 counterexample-checked scrutiny the `vsum`/`schmidt_decompose` addition got
 in §6, and is the user's to make.
+
+**Update: researched which candidate fits the project better, landed the
+part that turned out to be free, found a third candidate, still blocked.**
+A research pass (grep-level survey of `tcp_supp`/`vsum` call sites and of
+`Interface.v`'s own structure) and an `advisor` consultation both agreed:
+`tcp_supp_tensor` is the better-fitting candidate of the two above —
+`tcp_supp` already commutes with `_proj`/`_add`/`_scale`/`_sum`/`_conj`
+(`Interface.v`), so a `_tensor` variant completes an existing, reused
+pattern, whereas the Schmidt/`vsum` route would widen a section whose own
+comments (`Interface.v`) call it deliberately narrow, for zero other
+consumers even on paper (`QEq.v`'s `qeqOp`/`qeq`/`pqeq` are pure
+operator/hspace level, no `tcp_proj`/`tcp_ptrace2` anywhere).
+
+Formalizing it turned up a genuine surprise: **the direction `psat` actually
+needs — `tcp_supp (tcp_tensor r s) <=h htensor (tcp_supp r) (tcp_supp s)` —
+is not an axiom at all.** It is provable outright from `tcp_decompose`
+(applied to each factor) plus the already-landed `tcp_tensor_sum_sum`; no
+new axiom, no coherent-sum reasoning. Landed as `tcp_supp_tensor_le`
+(`Substrate/Theory.v`). The *converse* inclusion (and hence full equality)
+is a separate, stronger claim, not attempted and not needed.
+
+**But `tcp_supp_tensor_le` alone does not close `psat`.** Working the full
+chain (`tcp_supp` of the witness's output, through `tcp_supp_conj` and
+`tcp_supp_tensor_le`, down to `psi ⊗ (the reduced state's support)`) still
+leaves a second, separate requirement: relating `tcp_supp (tcp_ptrace2 r)`
+(the support of a *partial trace*) back to a condition on `r` itself, for a
+general — possibly entangled — pure `r = tcp_proj Y`. This does **not**
+reduce the same way `tcp_supp_tensor_le` did: `tcp_decompose`d applied to a
+single entangled vector's rank-1 projection just returns that vector, no
+progress. And it is not an independent fact — it is, mathematically,
+*another face of Schmidt decomposition*: "the support of a reduced state is
+spanned by the Schmidt basis" is the standard textbook statement of exactly
+this. So this route does not avoid the `vsum` boundary; it reaches the same
+wall from the support side rather than the vector side. A candidate shape,
+if this is the direction chosen:
+```coq
+Axiom tcp_supp_ptrace2 : forall X Y (r : tcp (X * Y)) (T : hspace Y),
+    tcp_supp (tcp_ptrace2 r) <=h T <-> tcp_supp r <=h htensor htop T.
+```
+(a Galois-connection duality between `tcp_ptrace2` and `htensor htop`,
+mirroring `hdivL`'s own vector-level duality with `tensorv` — arguably more
+general and more textbook-clean than either original candidate, but not yet
+checked against a counterexample or by `advisor`.)
+
+**Status: still blocked, and honestly so.** `advisor` became unavailable
+mid-verification (this second finding has had no second opinion), so no
+axiom has been added and none should be without one — this project's
+practice throughout has been: no substrate addition without scrutiny
+(`advisor` review, ideally a counterexample check, as `vsum`/
+`schmidt_decompose` got in §6). The decision is the user's: retry `advisor`
+when it's back, or decide directly whether to widen the `vsum` boundary
+(as `tcp_ptrace2_schmidt` or `tcp_supp_ptrace2`, whichever shape reviews
+better) to finish `QInit1`.
 
 `rUsplit_qidx_SL` (above) remains the bridge lemma that would eventually
 show the reformulated `qinit_pre` is equivalent to the paper's `pdiv`-based
