@@ -370,12 +370,56 @@ discharges that risk.
 
 ## 7. What to do next, in order
 
-Everything in Phase 1d is done except `QInit1` and `JointMeasureSimple`. The
-ordering below reflects what is actually blocked by what, not the phase
-numbering -- sections are numbered `7a`..`7g` in the order they were tackled
-historically, but as of this update **do §7f before returning to §7d**:
-`QInit1` (§7d) is now known to need the Schmidt decomposition that §7f's
-Lemma 29/30 also needs, so §7f is the actual next item, not §7e.
+Everything in Phase 1d is done except `QInit1` and `JointMeasureSimple`.
+Sections are numbered `7a`..`7g` in the order they were tackled historically,
+not in blocked-by order; read this map first, then jump to the section that
+matches what you're picking up.
+
+**The very next step is a decision, not a proof: which (if either) new
+substrate axiom to add to finish `QInit1`.** Full detail is at the end of
+§7d, but in short: `QInit1`'s witness (well-formedness, separability, both
+projections) is landed unconditionally, and everything else about the rule
+is ordinary, already-understood proof work. The one remaining piece,
+`psat`, was checked two independent ways and **both genuinely need a new
+axiom** -- this is not a case of "look harder and it'll reduce," it was
+worked all the way through. The two live candidate shapes (widen the
+Schmidt/`vsum` boundary again, as `tcp_ptrace2_schmidt`; or a
+`tcp_ptrace2`/`tcp_supp` Galois-connection duality, `tcp_supp_ptrace2`) are
+written out at the end of §7d, along with why a third candidate
+(`tcp_supp_tensor`) that looked promising turned out to be free (landed,
+no axiom) but insufficient by itself. Neither remaining candidate has had a
+counterexample check or a settled `advisor` review yet -- that's the actual
+next action, not further proof attempts. Once one is picked and lands (with
+a `Sanity.v` canary, per this project's standing practice), finishing
+`rule_QInit1` itself is mechanical: discharge `psat` with it, write the
+small `pred`-wrapper noted at the end of §7d, and assemble via
+`qrhl_pure_to_qrhl` (already proved, §7a) the same way every other one-sided
+rule in `Rules/Quantum.v` does.
+
+**Independently of that decision**, two other fronts are open and don't
+depend on it:
+- **§7f**: the substrate capability (Schmidt/`vsum`) is landed; Lemma 29's
+  *forward* direction is ordinary proof work with one genuinely unscoped
+  step (the paper's operator-norm/eigenvector argument -- read that
+  paragraph before starting, it may need its own auxiliary facts). Lemma
+  29's *converse* and Lemma 32 are both blocked on a register-coherence
+  layer (`rWsplit2` vs. `Urqpair`/individual splits) comparable in size to
+  `rUsplit_qidx_SL` (§7d) -- not started.
+- **§7e**: `JointMeasureSimple` is untouched. It looks, on the surface,
+  like it should port `JointSample`'s two-layer-projection technique
+  directly, but it also has to reason about how the quantum-equality
+  precondition interacts with measurement, which is new content this
+  project hasn't derived yet -- treat the scope as uncertain until that
+  interaction is actually worked out, not as a known quantity.
+
+Both of those carry real, not-yet-derived mathematical content (an
+operator-norm argument; a register-coherence layer; a qeq/measurement
+interaction). This session's own experience is that this kind of proof
+benefits substantially from `advisor` review before and during -- it
+caught a wrong witness design, a false extraction lemma, and a wrong
+"no axiom needed" turn, each of which would otherwise have cost a great
+deal of wasted effort. Scope carefully and consult before committing to an
+approach, the same way §7d itself was worked.
 
 ### 7a. Lemma 36's converse — DONE
 
@@ -533,6 +577,40 @@ No admits, no axioms beyond the two named above (net +2: `tcp_ptrace_pswap`,
 127 axioms.
 
 ### 7d. `QInit1`, and register coherence — the reassociation is DONE; the rule is not
+
+**Current status (read this first; the rest of this section is the
+chronological trail of how we got here, kept because the dead ends are worth
+not repeating):** register coherence is solved (`rUsplit_qidx_SL`); the
+precondition is reformulated to avoid a second `Uassoc` wall (`qinit_pre`);
+the witness's well-formedness, separability, and both projections are proved
+unconditionally (`QInit1_witness_wf_sep_proj`). The **only** open piece is
+`psat`, and it needs a new substrate axiom — confirmed by working two
+independent routes all the way through, not assumed. The candidates, neither
+yet reviewed or counterexample-checked:
+
+```coq
+(* Route A: widen the Schmidt/vsum boundary again *)
+Axiom tcp_ptrace2_schmidt : forall X Y I (lam : I -> R) (a : I -> l2 X) (b : I -> l2 Y),
+    (forall i, (0 < lam i)%R) -> (* + orthonormality of a, b, as in schmidt_decompose *)
+    vsummable (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i))) ->
+    tcp_ptrace2 (tcp_proj (vsum (fun i => vscale (RtoC (lam i)) (tensorv (a i) (b i)))))
+    = tcp_sum (fun i => tcp_scale (lam i * lam i) (tcp_proj (b i))).
+
+(* Route C: a tcp_ptrace2/tcp_supp Galois-connection duality *)
+Axiom tcp_supp_ptrace2 : forall X Y (r : tcp (X * Y)) (T : hspace Y),
+    tcp_supp (tcp_ptrace2 r) <=h T <-> tcp_supp r <=h htensor htop T.
+```
+
+Both are mathematically the same fact (the support/reduced-density-matrix of
+a Schmidt-decomposed state), stated at different levels; landing either one
+should close `psat`, and the choice is about which is a better-shaped
+addition to this trusted surface, not about correctness. **This is the very
+next action item for this project** — see §7 above for how to proceed once
+it's decided. The full paragraph-by-paragraph history below records: the
+witness redesign that led here, the reverted `Uprodassoc`/associator detour,
+the precondition reformulation, and the two failed/one free result from
+trying to close `psat` (`tcp_supp_tensor` turned out derivable for free —
+`tcp_supp_tensor_le`, landed — but insufficient alone).
 
 **Update: the assessment below (register coherence needs one monolithic
 dependent `Ubij`, "likely the most painful Rocq in the development") was
@@ -863,6 +941,15 @@ technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 
 ### 7f. §4.4's two remaining lemmas — the substrate capability is landed; the lemmas are not
 
+**Current status (read this first, rest is chronological trail):** the
+Schmidt/`vsum` substrate capability this needed is landed (§6). Lemma 29's
+*forward* direction is open, ordinary proof work, with one unscoped step
+flagged near the bottom of this section (the operator-norm/eigenvector
+argument). Lemma 29's *converse* and Lemma 32 are both open, blocked on an
+`rWsplit2`/`Urqpair` register-coherence layer, not yet built. None of this
+section is blocked on §7d's open axiom decision, and vice versa — the two
+fronts are independent; see §7's top-level map for the full picture.
+
 **Update: both estimates in this section (from before this session, and
 repeated in `QEq.v`'s "Not yet here" comment) turned out to be wrong, in a
 way worth stating precisely rather than just "harder than thought" again.**
@@ -1060,6 +1147,20 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
+| `d5f90f2` | `QEq.v`: correct the stale "Schmidt not addable" comment |
+| `8356019` | HANDOFF §7d: record the `tcp_supp_ptrace2` finding — still blocked, honestly |
+| `8d1638c` | `tcp_supp_tensor_le` — derived, not axiomatized (the free half of the `tcp_supp_tensor` candidate) |
+| `cddf5f7` | `QInit1_witness_wf_sep_proj` — the witness's wf/sep/both projections, landed unconditionally; `psat` needs a new axiom |
+| `803b471` | isolate `oapp_oadj_Usplit1`; document the `pdiv`/`qinit_pre` deviation in README |
+| `8301fb5` | `QInit1`'s precondition reformulated (`qinit_pre`, `Usplit1`) to avoid a second `Uassoc` wall; `ounitary_ocomp`/`_tensoro`/`_oadj`/`_oid` |
+| `aa0ea8e` | `vsum`/`vsummable`/`schmidt_decompose`/`hmem_tensor_span_component` — the Schmidt/coherent-sum substrate addition |
+| `aa76831`, `0d3826f` | docs: Schmidt decomposition needs a new substrate *category*, not an axiom (the finding behind `aa0ea8e`) |
+| `ca97b6a` | `pdiv` restated via `rhlift_r`; `himg_unitary` |
+| `1549d8b` | revert the `passoc`/associator axiom detour; `qinit_tcp` — the witness core, redesigned to stay within `qmem` |
+| `3c08eab`, `3c20339`, `a0846cc` | the reverted three-axiom `qinitL`/`tcp_ptrace*_passoc*` detour (see §6's "three-axiom detour" writeup for why) |
+| `5b3ec5e` | `Uprodassoc` — the plain-product associator (derived, still unused elsewhere) |
+| `7ef4119`, `4c32373`, `9c3b03e` | `rqneg_qidx`, `Urelab`, `Uassoc`, `rUsplit_qidx_SL` — the register-coherence identity for `QInit1` |
+| `9edfc46` | docs: record Lemma 36's converse, catch up on drift from prior commits |
 | `16cdd44` | `qrhl_pure_to_qrhl` — Lemma 36's converse, the main theorem |
 | `11a08bc` | trace/summability helpers (`inner_rprod`, `rdirac_trace`/`cqdirac_trace`, `cqs_scale_wf`/`cqs_trace_scale`, `tcp_summable_zero`) the converse's assembly needs |
 | `1c7ccae` | `pure_scaled_witness` — the converse's per-component step |
