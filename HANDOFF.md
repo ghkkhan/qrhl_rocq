@@ -416,8 +416,20 @@ been checked this carefully yet, but it uses the quantum-equality
 precondition directly, so it should be assumed to need at least the
 coherence layer too until shown otherwise.
 
-**So there is exactly one clearly-scoped, unblocked front left on the
-board: building the `rWsplit2`/`Urqpair` register-coherence layer itself.**
+**Update: half of this front is now built.** The `rWsplit2`/`Urqpair`
+register-coherence layer splits into two independent pieces (see §7f's
+"Update: half of this coherence layer is landed" block for the full
+account): the `rolift (rqunion Q1 Q2)` half (register-vs-rest-of-memory,
+for the *combined* register) is proved — `rUsplit_qidx2` and
+`rolift_qidx2_bridge` (`Registers.v`) — using exactly the playbook below,
+plus one new combinator (`qidx2`) the single-register case never needed.
+**The `rWsplit2 Q1 Q2 Hd` half (the `Q1`-vs-`Q2` join used *inside* the
+lifted operator, not the outer lift) is still open** — `Wjoin2q`
+(`Registers.v`) is built as the direct, computable join for the specific
+instance this needs, but relating `rWsplit2 (qidx SL Y1) (qidx SR Y2) Hd`
+to it has not been attempted yet. That is the next concrete step, not a new
+front — see §7f.
+
 It sits behind Lemma 29 (both directions), Lemma 32, and probably §7e. It
 also has a proven playbook: `rUsplit_qidx_SL` (§7d) solved the structurally
 identical problem for a single register (destruct the side tag concretely
@@ -1114,10 +1126,93 @@ technique (`sig1`/`sig2` bijections between `cmem * (X * Y)` and
 
 ### 7f. §4.4's two remaining lemmas — the substrate capability is landed; the lemmas are not
 
-**Current status (read this first, rest is chronological trail):** the
-Schmidt/`vsum` substrate capability this needed is landed (§6). **Corrected
-update: checked against the paper's actual proof text (`qRHL.pdf`), not
-recalled from memory, and both directions of Lemma 29 turn out to need the
+**Latest update, read this first: the `rolift`-level half of the
+`rWsplit2`/`Urqpair` coherence layer is now landed.** `qeqOp` (`QEq.v`)
+routes through *two* combined-register constructions, not one: `rolift
+(rqunion Q1 Q2)` (the outer lift, register-vs-rest-of-memory for the
+combined register) and `rWsplit2 Q1 Q2 Hd` (used *inside* the operator
+`rolift` lifts, the `Q1`-vs-`Q2` join). For the instance Lemma 29/32 need
+(`Q1 := qidx SL Y1`, `Q2 := qidx SR Y2`), the first is now proved:
+
+- **`qidx2 (Y1 Y2 : qset) : rqset`** (`Registers.v`) — `wunion rqvar
+  (qidx SL Y1) (qidx SR Y2)`, but built to *reduce by computation* once the
+  side is concrete, which the `wunion` form does not. `wunion` combines two
+  `qidx`s via `orb`, and `orb`'s definition pattern-matches on its *first*
+  argument — so `wunion rqvar (qidx SL Y1) (qidx SR Y2) (SL, q)` reduces
+  only as far as `orb (Y1 q) false`, stuck on the opaque `Y1 q`, even
+  though the *side* is fully concrete. `qidx2` avoids this by matching on
+  the side first (`match fst w with SL => Y1 (snd w) | SR => Y2 (snd w)
+  end`), the way `qidx` itself does — this reduces to `Y1 q` outright.
+  `qidx2_wunion` proves the two forms propositionally (not
+  definitionally — plain `reflexivity` does not close it) equal.
+- Building the join *of* `qidx2` meant abandoning the generic `wjoin2`/
+  `Wsplit2` combinator (§2/`Registers.v`'s two-set machinery) rather than
+  reusing it: `wjoin2`'s value is a `bmerge` of the *same* stuck `orb`-style
+  booleans, so it inherits the identical reduction wall. **`Wjoin2q`**
+  (`Registers.v`) is a fresh, direct `Ubij` between `rqsub (qidx SL Y1) *
+  rqsub (qidx SR Y2)` and `rqsub (qidx2 Y1 Y2)`, built the `Uassoc`-style
+  way (case-split on the side, no boolean-merge reasoning) instead.
+- **`Uassoc2`** (`Registers.v`) is the two-register analogue of `Uassoc`
+  (§7d): the case-split-computable `Ubij` relating `qidx2 Y1 Y2` and its
+  complement to the four separate `qsub`-level pieces
+  `(qsub Y1 * qsub Y2) * (qsub (qneg Y1) * qsub (qneg Y2))`.
+- **`Uprodswap_mid {A B C D} : op ((A*B)*(C*D)) ((A*C)*(B*D))`**
+  (`Substrate/Theory.v`, beside `Uprodassoc` — it is substrate-generic, not
+  register-specific) is the plain-product "middle swap" needed to
+  reassociate `Uassoc2`'s output into the shape `tensoro (Usplit Y1)
+  (Usplit Y2)` expects.
+- **`rUsplit_qidx2`** (`Registers.v`) is the payoff, mirroring
+  `rUsplit_qidx_SL` (§7d) exactly:
+  ```
+  rUsplit (qidx2 Y1 Y2)
+    = ocomp (oadj Urqpair) (ocomp (tensoro (Usplit Y1) (Usplit Y2))
+        (ocomp Uprodswap_mid (Uassoc2 Y1 Y2)))
+  ```
+  proved the same way — a ket-level identity (`rUsplit_qidx2_ket`, itself
+  needing a `wjoin`-level identity `wjoin_qidx2` relating the `qidx2`-join
+  to `rq_unpair` of the two individual-register joins) lifted by
+  `op_ext_ket`.
+- **`wolift_wset_cast`/`rolift_qidx2_bridge`** (`Registers.v`) bridge back
+  from `qidx2`'s vocabulary to `qeqOp`'s own `wunion`-based one:
+  `rqsub (qidx2 Y1 Y2)` and `rqsub (wunion rqvar (qidx SL Y1) (qidx SR
+  Y2))` are propositionally but *not* definitionally equal types (`qidx2_
+  wunion` needs `funext`, not `reflexivity`), so a bare rewrite of
+  `rUsplit_qidx2`'s statement into `wunion` vocabulary does not typecheck —
+  Rocq requires the two sides of an equation to have convertible types, and
+  these aren't. The fix checked and confirmed by `advisor` before building
+  further: `rolift`'s *output* type (`op rqmem rqmem`) does not mention `P`
+  at all, so the bridge is statable one level up, with `eq_rect` doing the
+  cast on the lifted operator only:
+  ```
+  rolift (qidx2 Y1 Y2) A
+    = rolift (wunion rqvar (qidx SL Y1) (qidx SR Y2))
+        (eq_rect (qidx2 Y1 Y2) (fun P => op (rqsub P) (rqsub P)) A _ (qidx2_wunion Y1 Y2))
+  ```
+  proved by a fully generic lemma (`wolift_wset_cast`, any `wset`/`Heq`) via
+  `destruct Heq; reflexivity` — an ordinary propositional-equality destruct,
+  unlike the `qidx2`-discriminee case above, works with no friction at all,
+  since `Heq` isn't hiding delta/iota behind it.
+  `make assumptions` confirms no new axiom: `eq_rect` is core Rocq, and
+  `functional_extensionality_dep` (used only inside `qidx2_wunion`) was
+  already in the assumption list.
+
+**What this does *not* yet cover, and is the next concrete step:**
+`rWsplit2 (qidx SL Y1) (qidx SR Y2) Hd` — used inside `qeqOp`'s operator,
+independently of `rolift`'s own internal `rUsplit` — has not been related
+to `Wjoin2q Y1 Y2` yet. `advisor`'s read (informed, not yet verified in
+Rocq): this proof should *not* hit the same `orb`-stuck wall the `qidx2`
+pivot was built to dodge, because `qidx_disjoint Y1 Y2` kills the
+`(true, true)` case of `bmerge`'s pattern, and `bmerge` (unlike `orb`)
+matches on *both* booleans at once, so the surviving three cases reduce by
+iota once the side is destructed. The `pose (a := v (SL,q) : ...); change
+...; clearbody a; destruct ...` idiom below (learned proving `wjoin_qidx2`)
+should carry over directly. Try `op_ext_ket` first, showing `Wsplit2 (qidx
+SL Y1) (qidx SR Y2) Hd` and (a cast of) `Wjoin2q Y1 Y2` act the same on
+kets, rather than fighting the underlying `wjoin2`/`bmerge` value directly.
+
+**Older update, still accurate for the historical trail below: checked
+against the paper's actual proof text (`qRHL.pdf`), not recalled from
+memory, and both directions of Lemma 29 turn out to need the
 same `rWsplit2`/`Urqpair` register-coherence layer — the forward/converse
 split this section and `QEq.v` stated twice is wrong.** The paper's forward
 proof regroups `(ψ1^Q⊗ψ1^Y)⊗(ψ2^Q⊗ψ2^Y)` into `ψ1^Q⊗ψ2^Q⊗ψ1^Y⊗ψ2^Y`, waved

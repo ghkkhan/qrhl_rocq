@@ -591,6 +591,244 @@ Module RegTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
     rewrite !oapp_ocomp; unfold Uassoc; reflexivity.
   Qed.
 
+  (* ================================================================= *)
+  (** ** Splitting the relational memory along *two* registers, one per side
+
+      [qeqOp] (`QEq.v`) needs [rUsplit (rqunion Q1 Q2)] related to [Urqpair]
+      plus the two *individual* splits [Usplit Q1]/[Usplit Q2], for
+      [Q1 := qidx SL Y1], [Q2 := qidx SR Y2] -- Lemma 29 (both directions)
+      and Lemma 32 both hit this (see QEq.v's "Not yet here" section). The
+      obvious route -- reduce to the generic [wjoin2]/[Wsplit2] two-set
+      combinator already above -- does not work: [wunion]'s [orb] is stuck
+      on an opaque first argument ([Y1 q]/[Y2 q]) even once the *side* is
+      concrete, so [wunion rqvar (qidx SL Y1) (qidx SR Y2) (SL, q)] reduces
+      only to [orb (Y1 q) false], not to [Y1 q]. [qidx2] below fixes that by
+      matching on the side *first*, the way [qidx] itself does, and the
+      whole development here is built fresh against it rather than reduced
+      to [wjoin2]. *)
+
+  (** [qidx2] is [wunion rqvar (qidx SL Y1) (qidx SR Y2)] (see [qidx2_wunion]
+      just below), but *reduces* once the side is concrete, unlike the
+      [wunion] form. *)
+  Definition qidx2 (Y1 Y2 : qset) : rqset :=
+    fun w => match fst w with SL => Y1 (snd w) | SR => Y2 (snd w) end.
+
+  Lemma qidx2_wunion (Y1 Y2 : qset) :
+    qidx2 Y1 Y2 = wunion rqvar (qidx SL Y1) (qidx SR Y2).
+  Proof.
+    apply funext; intros [t q]; unfold qidx2, wunion, qidx; cbn [fst snd];
+      destruct t; cbn; destruct (Y1 q); try destruct (Y2 q); reflexivity.
+  Qed.
+
+  (** Skip [wjoin2]'s generic [bmerge] machinery entirely: since [qidx2]
+      already matches on the side first, "join" is a direct case split, no
+      boolean-merge reasoning needed. This is the [Uassoc]-style move, not
+      the [wsplit2_wjoin2]-style one -- built fresh rather than reduced to
+      the generic two-set combinator. *)
+  Definition qjoin2_fwd (Y1 Y2 : qset) (vv : rqsub (qidx SL Y1) * rqsub (qidx SR Y2))
+    : rqsub (qidx2 Y1 Y2) :=
+    fun w => match w as w' return (if qidx2 Y1 Y2 w' then rqtype w' else unit) with
+             | (SL, q) => fst vv (SL, q)
+             | (SR, q) => snd vv (SR, q)
+             end.
+
+  Definition qjoin2_bwd (Y1 Y2 : qset) (v : rqsub (qidx2 Y1 Y2))
+    : rqsub (qidx SL Y1) * rqsub (qidx SR Y2) :=
+    (fun w => match w as w' return (if qidx SL Y1 w' then rqtype w' else unit) with
+              | (SL, q) => v (SL, q)
+              | (SR, q) => tt
+              end,
+     fun w => match w as w' return (if qidx SR Y2 w' then rqtype w' else unit) with
+              | (SL, q) => tt
+              | (SR, q) => v (SR, q)
+              end).
+
+  Lemma qjoin2_fwd_bwd (Y1 Y2 : qset) (v : rqsub (qidx2 Y1 Y2)) :
+    qjoin2_fwd Y1 Y2 (qjoin2_bwd Y1 Y2 v) = v.
+  Proof.
+    apply funext; intros [t q]; unfold qjoin2_fwd, qjoin2_bwd; cbn [fst snd];
+      destruct t; reflexivity.
+  Qed.
+
+  Lemma qjoin2_bwd_fwd (Y1 Y2 : qset) (vv : rqsub (qidx SL Y1) * rqsub (qidx SR Y2)) :
+    qjoin2_bwd Y1 Y2 (qjoin2_fwd Y1 Y2 vv) = vv.
+  Proof.
+    destruct vv as [v1 v2]; unfold qjoin2_fwd, qjoin2_bwd; cbn [fst snd]; f_equal.
+    - apply funext; intros [t q]; destruct t; [ reflexivity | ].
+      unfold qidx in v1; cbn in v1.
+      match goal with |- _ = ?x => destruct x; reflexivity end.
+    - apply funext; intros [t q]; destruct t; [ | reflexivity ].
+      unfold qidx in v2; cbn in v2.
+      match goal with |- _ = ?x => destruct x; reflexivity end.
+  Qed.
+
+  Definition Wjoin2q (Y1 Y2 : qset) : op (rqsub (qidx SL Y1) * rqsub (qidx SR Y2)) (rqsub (qidx2 Y1 Y2)) :=
+    Ubij (qjoin2_fwd Y1 Y2) (qjoin2_bwd Y1 Y2) (qjoin2_bwd_fwd Y1 Y2) (qjoin2_fwd_bwd Y1 Y2).
+
+  Lemma Wjoin2q_unitary (Y1 Y2 : qset) : ounitary (Wjoin2q Y1 Y2).
+  Proof. apply Ubij_ounitary. Qed.
+
+  (** The [Uassoc]-style reassociation for the two-register case: peel
+      [qidx2 Y1 Y2] and its complement apart into the four qsub-level
+      pieces directly, the same "match on the side, no boolean check
+      needed" move as [Uassoc_fwd]/[Uassoc_bwd]. *)
+  Definition Uassoc2_fwd (Y1 Y2 : qset)
+      (vp : rqsub (qidx2 Y1 Y2) * rqsub (rqneg (qidx2 Y1 Y2)))
+    : (qsub Y1 * qsub Y2) * (qsub (qneg Y1) * qsub (qneg Y2)) :=
+    ((fun q => fst vp (SL, q), fun q => fst vp (SR, q)),
+     (fun q => snd vp (SL, q), fun q => snd vp (SR, q))).
+
+  Definition Uassoc2_bwd (Y1 Y2 : qset)
+      (vp : (qsub Y1 * qsub Y2) * (qsub (qneg Y1) * qsub (qneg Y2)))
+    : rqsub (qidx2 Y1 Y2) * rqsub (rqneg (qidx2 Y1 Y2)) :=
+    ((fun w => match w as w' return (if qidx2 Y1 Y2 w' then rqtype w' else unit) with
+               | (SL, q) => fst (fst vp) q
+               | (SR, q) => snd (fst vp) q
+               end),
+     (fun w => match w as w' return (if rqneg (qidx2 Y1 Y2) w' then rqtype w' else unit) with
+               | (SL, q) => fst (snd vp) q
+               | (SR, q) => snd (snd vp) q
+               end)).
+
+  Lemma Uassoc2_fwd_bwd (Y1 Y2 : qset) (vp : (qsub Y1 * qsub Y2) * (qsub (qneg Y1) * qsub (qneg Y2))) :
+    Uassoc2_fwd Y1 Y2 (Uassoc2_bwd Y1 Y2 vp) = vp.
+  Proof. destruct vp as [[y1 y2] [z1 z2]]; reflexivity. Qed.
+
+  Lemma Uassoc2_bwd_fwd (Y1 Y2 : qset) (vp : rqsub (qidx2 Y1 Y2) * rqsub (rqneg (qidx2 Y1 Y2))) :
+    Uassoc2_bwd Y1 Y2 (Uassoc2_fwd Y1 Y2 vp) = vp.
+  Proof.
+    destruct vp as [v1 v2]; unfold Uassoc2_fwd, Uassoc2_bwd; cbn [fst snd]; f_equal.
+    - apply funext; intros [t q]; destruct t; reflexivity.
+    - apply funext; intros [t q]; destruct t; reflexivity.
+  Qed.
+
+  Definition Uassoc2 (Y1 Y2 : qset)
+    : op (rqsub (qidx2 Y1 Y2) * rqsub (rqneg (qidx2 Y1 Y2)))
+         ((qsub Y1 * qsub Y2) * (qsub (qneg Y1) * qsub (qneg Y2))) :=
+    Ubij (Uassoc2_fwd Y1 Y2) (Uassoc2_bwd Y1 Y2) (Uassoc2_bwd_fwd Y1 Y2) (Uassoc2_fwd_bwd Y1 Y2).
+
+  Lemma Uassoc2_unitary (Y1 Y2 : qset) : ounitary (Uassoc2 Y1 Y2).
+  Proof. apply Ubij_ounitary. Qed.
+
+  (** [wjoin]'s own generic "if [P w] then ... else ..." match, unlike
+      [Uassoc2]'s pieces above, genuinely needs the boolean's value: the
+      obstacle here is tactic-level, not mathematical -- [destruct]/[rewrite]
+      retype an applied term by *beta* alone, so when a discriminee needs
+      *delta+iota* (unfolding [qidx2] and reducing its match on a concrete
+      side) to reach [Y1 q], the goal (already [cbn]'d to show [Y1 q]) and
+      the type Coq independently recomputes for [vq (SL, q)] (still
+      [qidx2 Y1 Y2 (SL, q)], un-reduced) stop matching syntactically, and
+      [destruct]/[rewrite] fail with "abstracting ... leads to an ill-typed
+      term". Fix: force the reduction *before* destructing, by re-ascribing
+      the argument's type explicitly ([pose ... : if Y1 q then ... else unit])
+      and folding the goal onto that new name via [change], then [clearbody]
+      before the [destruct] -- at that point both sides of the goal and the
+      hypothesis agree syntactically, and [destruct (Y1 q)] closes by
+      [reflexivity]. *)
+  Lemma wjoin_qidx2 (Y1 Y2 : qset) (vq : rqsub (qidx2 Y1 Y2)) (vw : rqsub (rqneg (qidx2 Y1 Y2))) :
+    wjoin rqvar rqtype (qidx2 Y1 Y2) (vq, vw)
+    = rq_unpair (wjoin qvar qtype Y1 (fun q => vq (SL, q), fun q => vw (SL, q)),
+                 wjoin qvar qtype Y2 (fun q => vq (SR, q), fun q => vw (SR, q))).
+  Proof.
+    apply funext; intros [t q]; destruct t; unfold wjoin, rq_unpair; cbn [fst snd].
+    - pose (a := vq (SL, q) : if Y1 q then qtype q else unit).
+      pose (b := vw (SL, q) : if negb (Y1 q) then qtype q else unit).
+      change (vq (SL, q)) with a; change (vw (SL, q)) with b.
+      unfold qidx2, rqneg, wneg; cbn [fst snd].
+      clearbody a b; destruct (Y1 q); reflexivity.
+    - pose (a := vq (SR, q) : if Y2 q then qtype q else unit).
+      pose (b := vw (SR, q) : if negb (Y2 q) then qtype q else unit).
+      change (vq (SR, q)) with a; change (vw (SR, q)) with b.
+      unfold qidx2, rqneg, wneg; cbn [fst snd].
+      clearbody a b; destruct (Y2 q); reflexivity.
+  Qed.
+
+  Lemma rUsplit_qidx2_ket (Y1 Y2 : qset)
+      (vq : rqsub (qidx2 Y1 Y2)) (vw : rqsub (rqneg (qidx2 Y1 Y2))) :
+    oapp (rUsplit (qidx2 Y1 Y2)) (tensorv (ket vq) (ket vw))
+    = oapp (oadj Urqpair)
+        (oapp (tensoro (Usplit Y1) (Usplit Y2))
+           (oapp Uprodswap_mid
+              (tensorv (tensorv (ket (fun q => vq (SL, q))) (ket (fun q => vq (SR, q))))
+                       (tensorv (ket (fun q => vw (SL, q))) (ket (fun q => vw (SR, q))))))).
+  Proof.
+    set (vqL := fun q => vq (SL, q)).
+    set (vqR := fun q => vq (SR, q)).
+    set (vwL := fun q => vw (SL, q)).
+    set (vwR := fun q => vw (SR, q)).
+    transitivity (ket (wjoin rqvar rqtype (qidx2 Y1 Y2) (vq, vw))).
+    { rewrite tensorv_ket; apply Wsplit_ket. }
+    transitivity (ket (rq_unpair (wjoin qvar qtype Y1 (vqL, vwL), wjoin qvar qtype Y2 (vqR, vwR)))).
+    { f_equal; apply wjoin_qidx2. }
+    transitivity (oapp (oadj Urqpair) (ket (wjoin qvar qtype Y1 (vqL, vwL), wjoin qvar qtype Y2 (vqR, vwR)))).
+    { unfold Urqpair; rewrite Ubij_adj; symmetry; apply Ubij_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (tensorv (ket (wjoin qvar qtype Y1 (vqL, vwL))) (ket (wjoin qvar qtype Y2 (vqR, vwR))))).
+    { f_equal; symmetry; apply tensorv_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (tensorv (oapp (Usplit Y1) (ket (vqL, vwL))) (oapp (Usplit Y2) (ket (vqR, vwR))))).
+    { f_equal; f_equal; symmetry; apply Wsplit_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (tensorv (oapp (Usplit Y1) (tensorv (ket vqL) (ket vwL)))
+                             (oapp (Usplit Y2) (tensorv (ket vqR) (ket vwR))))).
+    { f_equal; f_equal; f_equal; symmetry; apply tensorv_ket. }
+    transitivity (oapp (oadj Urqpair)
+                    (oapp (tensoro (Usplit Y1) (Usplit Y2))
+                       (tensorv (tensorv (ket vqL) (ket vwL)) (tensorv (ket vqR) (ket vwR))))).
+    { f_equal; symmetry; apply tensoro_app. }
+    f_equal; f_equal.
+    rewrite !tensorv_ket.
+    unfold Uprodswap_mid; rewrite Ubij_ket; reflexivity.
+  Qed.
+
+  (** [rUsplit_qidx2_ket] lifted off kets to the full operator: the register
+      coherence layer [qeqOp] (`QEq.v`) needs, phrased over [qidx2] (see
+      [rolift_qidx2_bridge] below for the bridge back to [qeqOp]'s own
+      [wunion]-based vocabulary). *)
+  Lemma rUsplit_qidx2 (Y1 Y2 : qset) :
+    rUsplit (qidx2 Y1 Y2)
+    = ocomp (oadj Urqpair) (ocomp (tensoro (Usplit Y1) (Usplit Y2)) (ocomp Uprodswap_mid (Uassoc2 Y1 Y2))).
+  Proof.
+    apply op_ext_ket; intros [vq vw].
+    transitivity (oapp (oadj Urqpair)
+                    (oapp (tensoro (Usplit Y1) (Usplit Y2))
+                       (oapp Uprodswap_mid
+                          (tensorv (tensorv (ket (fun q => vq (SL, q))) (ket (fun q => vq (SR, q))))
+                                   (tensorv (ket (fun q => vw (SL, q))) (ket (fun q => vw (SR, q)))))))).
+    { rewrite <- tensorv_ket; apply rUsplit_qidx2_ket. }
+    rewrite !tensorv_ket.
+    change ((fun q => vq (SL, q), fun q => vq (SR, q)), (fun q => vw (SL, q), fun q => vw (SR, q)))
+      with (Uassoc2_fwd Y1 Y2 (vq, vw)).
+    rewrite <- (Ubij_ket _ _ (Uassoc2_fwd Y1 Y2) (Uassoc2_bwd Y1 Y2) (Uassoc2_bwd_fwd Y1 Y2) (Uassoc2_fwd_bwd Y1 Y2)).
+    rewrite !oapp_ocomp; unfold Uassoc2; reflexivity.
+  Qed.
+
+  (** [wolift]/[rolift] cast cleanly along a propositional equality of the
+      underlying set: both sides are [op wmem wmem] regardless of [P], so no
+      cast is needed there, only on the lifted operator itself
+      ([eq_rect]-transported along [Heq]). Fully generic -- unlike the
+      [qidx2]-vs-[wunion] mismatch above, [P = P'] here is an ordinary
+      hypothesis, not a "stuck behind delta+iota" discriminee, so
+      [destruct Heq; reflexivity] closes it outright. *)
+  Lemma wolift_wset_cast (W : Type) (wty : W -> Type) (P P' : wset W) (Heq : P = P')
+      (A : op (wsub W wty P) (wsub W wty P)) :
+    wolift W wty P A
+    = wolift W wty P' (eq_rect P (fun Q => op (wsub W wty Q) (wsub W wty Q)) A P' Heq).
+  Proof.
+    destruct Heq. reflexivity.
+  Qed.
+
+  (** The consumable form for [qeqOp] (`QEq.v`): [rolift] over the combined
+      register [rqunion Q1 Q2] (its own vocabulary, for [Q1 := qidx SL Y1],
+      [Q2 := qidx SR Y2]) equals [rolift (qidx2 Y1 Y2)] of a cast of the same
+      operator, whose [Wsplit] is fully expanded by [rUsplit_qidx2] above. *)
+  Lemma rolift_qidx2_bridge (Y1 Y2 : qset) (A : op (rqsub (qidx2 Y1 Y2)) (rqsub (qidx2 Y1 Y2))) :
+    rolift (qidx2 Y1 Y2) A
+    = rolift (wunion rqvar (qidx SL Y1) (qidx SR Y2))
+        (eq_rect (qidx2 Y1 Y2) (fun P => op (rqsub P) (rqsub P)) A
+                 (wunion rqvar (qidx SL Y1) (qidx SR Y2)) (qidx2_wunion Y1 Y2)).
+  Proof. apply wolift_wset_cast. Qed.
+
   (** The side swap on [rqmem], as a [Ubij]. Composing it with [Urqpair] and
       composing [Urqpair] with the factor swap [Uswap] agree -- both send
       [rqmem]'s [(V1,V2)] pairing to [(V2,V1)] -- which is an index

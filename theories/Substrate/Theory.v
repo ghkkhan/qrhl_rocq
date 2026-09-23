@@ -430,6 +430,19 @@ Module HTheory (S : HILBERT_SUBSTRATE).
          (ltac:(intros [[a b] c]; reflexivity))
          (ltac:(intros [a [b c]]; reflexivity)).
 
+  (** The plain-product "middle swap": [(A*B)*(C*D) -> (A*C)*(B*D)]. Needed to
+      reassociate a register-coherence split where *two* registers have each
+      been split into (register, complement) pairs -- e.g. [rUsplit_qidx2]
+      (`Registers.v`) -- into the shape a side-by-side [tensoro] of two
+      single-register splits expects. Generic, like [Uprodassoc]: no
+      dependent typing, both round trips are one-liners by the same formula
+      applied at each of the two (unrelated) type instantiations. *)
+  Definition Uprodswap_mid {A B C D : Type} : op ((A * B) * (C * D)) ((A * C) * (B * D)) :=
+    Ubij (fun p => ((fst (fst p), fst (snd p)), (snd (fst p), snd (snd p))))
+         (fun q => ((fst (fst q), fst (snd q)), (snd (fst q), snd (snd q))))
+         (ltac:(intros [[a b] [c d]]; reflexivity))
+         (ltac:(intros [[a c] [b d]]; reflexivity)).
+
   Lemma ocomp_oid_l {X Y} (A : op X Y) : ocomp oid A = A.
   Proof. apply op_ext; intros v; rewrite oapp_ocomp, oapp_oid; reflexivity. Qed.
 
@@ -565,6 +578,9 @@ Module HTheory (S : HILBERT_SUBSTRATE).
   Proof. apply Ubij_unitary. Qed.
 
   Lemma Uprodassoc_unitary {A B C : Type} : ounitary (@Uprodassoc A B C).
+  Proof. apply Ubij_ounitary. Qed.
+
+  Lemma Uprodswap_mid_unitary {A B C D : Type} : ounitary (@Uprodswap_mid A B C D).
   Proof. apply Ubij_ounitary. Qed.
 
   (** The identity reindexing is [oid], and composing two [Ubij]s along

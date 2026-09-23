@@ -242,18 +242,30 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         psi2^Y)` into `psi1^Q (x) psi2^Q (x) psi1^Y (x) psi2^Y`, waved
         through as "the tensor product is commutative in our formalism" --
         in this encoding that regrouping *is* the [rWsplit2] combined-
-        register coherence layer (below), so **the forward direction needs
-        it too**, not just the converse. (An earlier version of this comment
-        said otherwise; that was wrong, corrected here and in HANDOFF.md
-        S7f.) [qeqOp] routes through [rWsplit2] (the combined-register split
-        of [Q1] and [Q2] together), and relating [rprod v1 v2] (built from
-        [Urqpair] plus the two *individual* splits [Usplit Q1]/[Usplit Q2])
-        to that combined split is a register coherence layer comparable in
-        size to [rUsplit_qidx_SL] (`Registers.v`), not a one-liner. See
-        HANDOFF.md S7f for both findings in full, including that [Urelab]
-        (`Registers.v`) and [UYL]/[UYR] just below are the same construction
-        in opposite directions -- reuse one rather than building a third
-        copy.
+        register coherence layer, so **the forward direction needs it too**,
+        not just the converse. (An earlier version of this comment said
+        otherwise; that was wrong, corrected here and in HANDOFF.md S7f.)
+
+        **Update: half of this coherence layer is landed.** [qeqOp] routes
+        through *two* things built from [Q1]/[Q2] together: [rolift
+        (rqunion Q1 Q2)] (the register-vs-rest-of-memory split for the
+        combined register) and [rWsplit2 Q1 Q2 Hd] itself (the [Q1]-vs-[Q2]
+        join, used *inside* the operator [rolift] lifts). For the instance
+        this needs ([Q1 := qidx SL Y1], [Q2 := qidx SR Y2]), the *first*
+        piece is now proved: [rUsplit_qidx2] and its consumable wrapper
+        [rolift_qidx2_bridge] (`Registers.v`) express [rolift (rqunion
+        (qidx SL Y1) (qidx SR Y2))] of any operator via [Urqpair] plus the
+        two *individual* splits [Usplit Y1]/[Usplit Y2], exactly like
+        [rUsplit_qidx_SL] does for one register. **The second piece --
+        relating [rWsplit2 (qidx SL Y1) (qidx SR Y2) Hd] itself to the new
+        [Wjoin2q Y1 Y2] (`Registers.v`, a direct, computable join built for
+        exactly this instance) -- is still open**, and is what actually
+        blocks finishing Lemma 29. See HANDOFF.md S7f/S7g for the full
+        writeup, including why [wjoin2]'s generic [bmerge] machinery needed
+        replacing (not just reducing to) for this to go through at all, and
+        that [Urelab] (`Registers.v`) and [UYL]/[UYR] just below are the
+        same construction in opposite directions -- reuse one rather than
+        building a third copy.
 
       - Lemma 32, [(A1»Q1) . (U1 Q1 =quant U2 Q2) = (U1 A1^adj) Q1 =quant U2 Q2]
         for unitary [A1], which is how rule QApply1's preconditions get
@@ -262,8 +274,10 @@ Module QEqTheory (S : HILBERT_SUBSTRATE) (V : PROGRAM_VARS).
         register theory: it relates [rolift Q1], a lift over one register, to
         [rolift (Q1 u Q2)], a lift over the combined one, and the coherence
         between nested lifts is not proved yet -- the same [rWsplit2] gap
-        Lemma 29's converse hits above. That coherence is worth having on
-        its own account -- rules Frame and Equal will need it too.
+        Lemma 29's converse hits above (see the update just above: the
+        [rolift]-level half of this is landed, the [rWsplit2]-level half is
+        not). That coherence is worth having on its own account -- rules
+        Frame and Equal will need it too.
 
       Lemmas 33 and 34 build on 29 and are further out. *)
 
