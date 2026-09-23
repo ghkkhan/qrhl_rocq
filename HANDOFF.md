@@ -757,6 +757,25 @@ thing not yet tried, and the most promising lead for a future session, is
 reconsidering `qinit_pre`'s *definition* — not another proof against the
 current one.
 
+**Note for whoever reconsiders `qinit_pre`'s definition: the paper's own
+proof of Lemma 66 (`qRHL.pdf`, read directly for this, not from summary)
+uses the *landed* `hmem_tensor_span_component` orientation, not its
+mirror.** It Schmidt-decomposes `psi1` and extracts "rest ⊗ side2" (the
+factor combined into the witness) given the *register* factor is what
+carries the orthogonality — i.e. register second, rest first, the reverse
+of this codebase's `Usplit P : op (qsub P * qsub (qneg P)) qmem` (register
+first). This does not reopen `QInit1` — it only matters for a step *after*
+the actual blocker (getting `hmem Y (htensor htop T)` out of the
+precondition hypothesis at all), which doesn't care which Schmidt factor
+gets extracted afterward — so it was checked and confirmed *not* to bypass
+the wall (composing with `Uswap` to get the right orientation still needs
+`oapp (oadj Uswap) (vsum F) = vsum (oadj Uswap ∘ F)`, the same unavailable
+law, a sixth appearance). But it is a real, useful refinement: **if the
+extraction blocker is ever resolved by other means, the axiom package
+likely drops from two (`tcp_ptrace2_schmidt` + the mirror
+`hmem_tensor_span_component_r`) to one (`tcp_ptrace2_schmidt` alone)** —
+check this before re-deriving the mirror from scratch.
+
 `QInit1` is shelved here. Nothing further was pushed to the repository —
 the investigation correctly stopped short of the bar for that rather than
 forcing a result.
