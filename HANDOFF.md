@@ -5,7 +5,7 @@ project *is*; this file says what has been decided, what has been learned, and
 what to do next. Read this first, then `AXIOMS.md`, then
 `theories/Substrate/Interface.v`.
 
-Last updated at commit `d5af2fb`. Seventeen of the paper's rules are proved,
+Last updated at commit `8da0d15`. Seventeen of the paper's rules are proved,
 Lemma 36 is proved in both directions, and there are no admits and no axioms
 outside the substrate signature (which now includes a countable coherent
 vector sum and the Schmidt decomposition -- see §6/§7f).
@@ -1508,6 +1508,7 @@ Each commit message explains *why*; this is just the map.
 
 | commit | what |
 |---|---|
+| `8da0d15` | `rUsplit_qidx2`/`rolift_qidx2_bridge` — half of the `rWsplit2`/`Urqpair` combined-register coherence layer (`qidx2`, `Wjoin2q`, `Uassoc2`, `Uprodswap_mid`) |
 | `d5f90f2` | `QEq.v`: correct the stale "Schmidt not addable" comment |
 | `8356019` | HANDOFF §7d: record the `tcp_supp_ptrace2` finding — still blocked, honestly |
 | `8d1638c` | `tcp_supp_tensor_le` — derived, not axiomatized (the free half of the `tcp_supp_tensor` candidate) |
