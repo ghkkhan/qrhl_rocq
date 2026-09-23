@@ -426,9 +426,13 @@ plus one new combinator (`qidx2`) the single-register case never needed.
 **The `rWsplit2 Q1 Q2 Hd` half (the `Q1`-vs-`Q2` join used *inside* the
 lifted operator, not the outer lift) is still open** — `Wjoin2q`
 (`Registers.v`) is built as the direct, computable join for the specific
-instance this needs, but relating `rWsplit2 (qidx SL Y1) (qidx SR Y2) Hd`
-to it has not been attempted yet. That is the next concrete step, not a new
-front — see §7f.
+instance this needs, but three separate attempts to relate `rWsplit2
+(qidx SL Y1) (qidx SR Y2) Hd` to it all failed, for reasons now precisely
+understood (a cast built at the wrong level, then one that erases the
+content it needed, then a hand-built join that hits a *different and more
+fundamental* obstacle than the one `qidx2` was built to fix). A concrete,
+not-yet-tried next approach is recorded — see §7f's "three approaches were
+tried" block for the full account, including exactly why each one broke.
 
 It sits behind Lemma 29 (both directions), Lemma 32, and probably §7e. It
 also has a proven playbook: `rUsplit_qidx_SL` (§7d) solved the structurally
@@ -1199,16 +1203,61 @@ combined register) and `rWsplit2 Q1 Q2 Hd` (used *inside* the operator
 **What this does *not* yet cover, and is the next concrete step:**
 `rWsplit2 (qidx SL Y1) (qidx SR Y2) Hd` — used inside `qeqOp`'s operator,
 independently of `rolift`'s own internal `rUsplit` — has not been related
-to `Wjoin2q Y1 Y2` yet. `advisor`'s read (informed, not yet verified in
-Rocq): this proof should *not* hit the same `orb`-stuck wall the `qidx2`
-pivot was built to dodge, because `qidx_disjoint Y1 Y2` kills the
-`(true, true)` case of `bmerge`'s pattern, and `bmerge` (unlike `orb`)
-matches on *both* booleans at once, so the surviving three cases reduce by
-iota once the side is destructed. The `pose (a := v (SL,q) : ...); change
-...; clearbody a; destruct ...` idiom below (learned proving `wjoin_qidx2`)
-should carry over directly. Try `op_ext_ket` first, showing `Wsplit2 (qidx
-SL Y1) (qidx SR Y2) Hd` and (a cast of) `Wjoin2q Y1 Y2` act the same on
-kets, rather than fighting the underlying `wjoin2`/`bmerge` value directly.
+to `Wjoin2q Y1 Y2` yet. **Three approaches were tried (in the scratch file
+only, none ported) and all failed; the reasons are worth recording so a
+future session doesn't repeat them:**
+
+1. **`op_ext_ket`, showing `Wsplit2 (qidx SL Y1) (qidx SR Y2) Hd` equals
+   `ocomp (Ucast_wset ... (qidx2_wunion Y1 Y2)) (Wjoin2q Y1 Y2)`**, mirroring
+   `rolift_qidx2_bridge`'s cast idiom. This is the wrong level for the cast:
+   `rolift`'s bridge worked because `rolift`'s *output* type (`op rqmem
+   rqmem`) never mentions the register set `P` at all, so `Heq : P = P'`
+   only had to transport the lifted *operator* — a genuine variable, free to
+   co-vary. Here, one side of the pointwise goal is `wjoin2 rqvar rqtype
+   (qidx SL Y1) (qidx SR Y2) (v1, v2)`, whose type is *pinned* to
+   `rqsub (wunion ...)` by `wjoin2`'s own codomain — not a variable, not
+   expressed through any cast. `destruct (qidx2_wunion Y1 Y2)` on a goal
+   containing that term fails outright ("abstracting over the terms ...
+   leads to an ill-typed term"): the motive would need that pinned type to
+   co-vary too, and it structurally cannot.
+2. **`generalize` the pinned term first, to make it a free variable, then
+   `destruct` the cast equality.** This fixes the typing problem but throws
+   away the one thing the proof needed: after `destruct`, the goal becomes
+   `w (SL, q) = eq_rect ... eq_refl (SL, q)` for an *opaque* `w`, with no
+   remaining connection back to `wjoin2`'s `bmerge` definition to prove it
+   from. Generalizing erases exactly the content the equality is about.
+3. **Build the join directly into `wunion`'s codomain**, bypassing `qidx2`
+   and any cast entirely, the way `qjoin2_fwd` (`qidx2`-flavored) does but
+   targeting `rqsub (wunion rqvar (qidx SL Y1) (qidx SR Y2))` from the
+   start, via an explicit `match Y1 q as b return (if orb b (qidx SR Y2
+   (SL, q)) then rqtype (SL, q) else unit) with true => fst vv (SL, q) |
+   false => tt end`. **This does not typecheck, for a different and more
+   fundamental reason than the `orb`-stuck-on-an-opaque-boolean problem
+   `qidx2` was built to fix.** Matching on `Y1 q` only ties *that one
+   occurrence* to the branch label via the `return` clause; `fst vv (SL,
+   q)`'s own type (computed independently from `vv`'s declared type
+   `rqsub (qidx SL Y1)`) still mentions a *separate*, un-substituted
+   occurrence of `Y1 q` (via `qidx SL Y1 (SL, q)`'s own unfolding) that
+   Coq's dependent-match elaboration does not — and structurally cannot —
+   resolve to the branch's `true`, since the two occurrences are only
+   propositionally, not syntactically, tied together by the match.
+   (`qjoin2_fwd`'s success in the `qidx2` version depended on matching on
+   the *pair* `w` and having *both* the branch's expected type and `v`'s own
+   type reduce, independently, through the *same* `qidx2` unfolding to the
+   *same* normal form — not on the branch label resolving `Y1 q` itself.)
+
+**Recommended next approach, not yet attempted:** skip `Wjoin2q`/`qidx2`
+for this piece entirely, and work purely at the ket level the way
+`rUsplit_qidx2_ket` does for `Wsplit` — state a ket-level identity for
+`Wsplit2 (qidx SL Y1) (qidx SR Y2) Hd` directly in terms of `Urqpair`,
+`Usplit Y1`, `Usplit Y2` (no intermediate combinator, no cast), and prove
+the underlying pointwise fact about `wjoin2`'s own `bmerge` value using the
+`pose (a := v (SL, q) : ...); change ...; clearbody a; destruct (Y1 q)`
+idiom directly on `bmerge`'s two (already well-typed, not hand-constructed)
+arguments, the same way `wjoin_qidx2` handled `wjoin`'s discriminee. That
+sidesteps both failure modes above: there is no cast to typecheck, and
+`bmerge`'s existing arguments are already correctly typed at each branch
+(nothing is being newly *constructed* into a codomain that doesn't reduce).
 
 **Older update, still accurate for the historical trail below: checked
 against the paper's actual proof text (`qRHL.pdf`), not recalled from
